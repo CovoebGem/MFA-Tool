@@ -1,0 +1,34 @@
+syntax = "proto2";
+
+package googleauth;
+
+message MigrationPayload {
+  repeated OtpParameters otp_parameters = 1;
+}
+
+message OtpParameters {
+  optional bytes secret = 1;
+  optional string name = 2;
+  optional string issuer = 3;
+  optional Algorithm algorithm = 4;
+  optional DigitCount digits = 5;
+  optional OtpType type = 6;
+  optional int64 counter = 7;
+}
+
+enum Algorithm {
+  ALGORITHM_UNSPECIFIED = 0;
+  SHA1 = 1;
+}
+
+enum DigitCount {
+  DIGIT_COUNT_UNSPECIFIED = 0;
+  SIX = 1;
+  EIGHT = 2;
+}
+
+enum OtpType {
+  OTP_TYPE_UNSPECIFIED = 0;
+  HOTP = 1;
+  TOTP = 2;
+}
