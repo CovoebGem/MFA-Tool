@@ -48,21 +48,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Tauri app
+      - name: Build and release Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: npx tauri
           args: ${{ matrix.args }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-${{ matrix.platform }}-${{ matrix.args || 'default' }}
-          path: |
-            src-tauri/target/**/bundle/**/*.exe
-            src-tauri/target/**/bundle/**/*.msi
-            src-tauri/target/**/bundle/**/*.dmg
-            src-tauri/target/**/bundle/**/*.AppImage
-            src-tauri/target/**/bundle/**/*.deb
+          tagName: ${{ github.ref_name }}
+          releaseName: "2FA Tool ${{ github.ref_name }}"
+          releaseBody: "下载对应平台的安装包即可使用。"
+          releaseDraft: false
+          prerelease: false
