@@ -5,6 +5,7 @@ import {
   checkDuplicates,
   skipDuplicates,
   overrideDuplicates,
+  findInternalDuplicates,
 } from "./dedup-checker";
 
 // --- Generators ---
@@ -204,6 +205,153 @@ describe("Property 11: 覆盖重复项", () => {
           // Each unique account should be in the result
           for (const acc of result.unique) {
             expect(overriddenIds.has(acc.id)).toBe(true);
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});
+
+
+/**
+ * Feature: account-toolbar, Property 3: 内部重复检测正确性
+ * **Validates: Requirements 2.2**
+ *
+ * 对于任意 OTPAccount 列表，findInternalDuplicates 返回的重复分组应满足：
+ * 同一分组内的所有账户共享相同的 secret 或相同的 name+issuer 组合，
+ * 且列表中所有具有相同 secret 或相同 name+issuer 的账户都被归入某个重复分组。
+ */
+describe("Property 3: 内部重复检测正确性", () => {
+  it("should group accounts that share the same secret correctly", () => {
+    fc.assert(
+      fc.property(
+        fc.array(otpAccountArb(), { minLength: 0, maxLength: 20 }),
+        (accounts) => {
+          const groups = findInternalDuplicates(accounts);
+          const secretGroups = groups.filter((g) => g.matchType === "secret");
+
+          for (const group of secretGroups) {
+            // All accounts in a secret group must share the same secret
+            const secrets = new Set(group.accounts.map((a) => a.secret));
+            expect(secrets.size).toBe(1);
+            // Group must have at least 2 accounts (otherwise it's not a duplicate)
+            expect(group.accounts.length).toBeGreaterThanOrEqual(2);
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("should group accounts that share the same name+issuer correctly", () => {
+    fc.assert(
+      fc.property(
+        fc.array(otpAccountArb(), { minLength: 0, maxLength: 20 }),
+        (accounts) => {
+          const groups = findInternalDuplicates(accounts);
+          const nameIssuerGroups = groups.filter(
+            (g) => g.matchType === "name_issuer",
+          );
+
+          for (const group of nameIssuerGroups) {
+            // All accounts in a name_issuer group must share the same name+issuer
+            const keys = new Set(
+              group.accounts.map((a) => `${a.name}\0${a.issuer}`),
+            );
+            expect(keys.size).toBe(1);
+            expect(group.accounts.length).toBeGreaterThanOrEqual(2);
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("should capture all accounts with duplicate secrets into some group", () => {
+    fc.assert(
+      fc.property(
+        fc.array(otpAccountArb(), { minLength: 0, maxLength: 20 }),
+        (accounts) => {
+          const groups = findInternalDuplicates(accounts);
+          const secretGroups = groups.filter((g) => g.matchType === "secret");
+
+          // Build expected: all secrets that appear more than once
+          const secretCounts = new Map<string, OTPAccount[]>();
+          for (const acc of accounts) {
+            if (!secretCounts.has(acc.secret)) {
+              secretCounts.set(acc.secret, []);
+            }
+            secretCounts.get(acc.secret)!.push(acc);
+          }
+
+          for (const [secret, accs] of secretCounts) {
+            if (accs.length > 1) {
+              // There must be a secret group containing all these accounts
+              const matchingGroup = secretGroups.find(
+                (g) => g.accounts[0].secret === secret,
+              );
+              expect(matchingGroup).toBeDefined();
+              const groupIds = new Set(matchingGroup!.accounts.map((a) => a.id));
+              for (const acc of accs) {
+                expect(groupIds.has(acc.id)).toBe(true);
+              }
+            }
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("should capture all accounts with duplicate name+issuer into some group", () => {
+    fc.assert(
+      fc.property(
+        fc.array(otpAccountArb(), { minLength: 0, maxLength: 20 }),
+        (accounts) => {
+          const groups = findInternalDuplicates(accounts);
+
+          // Build expected: all name+issuer combos that appear more than once
+          const niCounts = new Map<string, OTPAccount[]>();
+          for (const acc of accounts) {
+            const key = `${acc.name}\0${acc.issuer}`;
+            if (!niCounts.has(key)) {
+              niCounts.set(key, []);
+            }
+            niCounts.get(key)!.push(acc);
+          }
+
+          for (const [, accs] of niCounts) {
+            if (accs.length > 1) {
+              // These accounts should appear in either a secret group or a name_issuer group
+              // (if all share the same secret, they'll be in a secret group only)
+              const allInSecretGroup = new Set(accs.map((a) => a.secret)).size === 1;
+              if (allInSecretGroup) {
+                // Should be covered by a secret group
+                const secretGroups = groups.filter((g) => g.matchType === "secret");
+                const matchingGroup = secretGroups.find(
+                  (g) => g.accounts[0].secret === accs[0].secret,
+                );
+                expect(matchingGroup).toBeDefined();
+                const groupIds = new Set(matchingGroup!.accounts.map((a) => a.id));
+                for (const acc of accs) {
+                  expect(groupIds.has(acc.id)).toBe(true);
+                }
+              } else {
+                // Should be covered by a name_issuer group
+                const niGroups = groups.filter((g) => g.matchType === "name_issuer");
+                const niKey = `${accs[0].name}\0${accs[0].issuer}`;
+                const matchingGroup = niGroups.find(
+                  (g) =>
+                    `${g.accounts[0].name}\0${g.accounts[0].issuer}` === niKey,
+                );
+                expect(matchingGroup).toBeDefined();
+                const groupIds = new Set(matchingGroup!.accounts.map((a) => a.id));
+                for (const acc of accs) {
+                  expect(groupIds.has(acc.id)).toBe(true);
+                }
+              }
+            }
           }
         },
       ),

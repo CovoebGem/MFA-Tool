@@ -36,6 +36,23 @@ export function addAccounts(
 }
 
 /**
+ * 更新指定账户的信息
+ * @param accounts - 现有账户列表
+ * @param id - 要更新的账户 ID
+ * @param updates - 要更新的字段
+ * @returns 更新后的账户列表
+ */
+export function updateAccount(
+  accounts: OTPAccount[],
+  id: string,
+  updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>,
+): OTPAccount[] {
+  return accounts.map((a) =>
+    a.id === id ? { ...a, ...updates } : a,
+  );
+}
+
+/**
  * 删除指定账户
  * @param accounts - 现有账户列表
  * @param id - 要删除的账户 ID

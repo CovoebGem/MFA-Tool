@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import ImageUploader from "./ImageUploader";
 import ManualAddForm from "./ManualAddForm";
+import Dashboard from "./Dashboard";
+import RecentAccounts from "./RecentAccounts";
 import { findOrCreateGroupByIssuer } from "../lib/group-manager";
 import { checkDuplicates } from "../lib/dedup-checker";
 import type { OTPAccount, Group, DedupResult } from "../types";
@@ -11,6 +13,7 @@ interface HomePageProps {
   onAccountsAdded: (accounts: OTPAccount[]) => void;
   onGroupsUpdated: (groups: Group[]) => void;
   onDedupDetected: (result: DedupResult, newGroups: Group[]) => void;
+  onToast: (message: string, type: "success" | "error") => void;
 }
 
 export default function HomePage({
@@ -19,6 +22,7 @@ export default function HomePage({
   onAccountsAdded,
   onGroupsUpdated,
   onDedupDetected,
+  onToast,
 }: HomePageProps) {
   /**
    * 图片导入回调：
@@ -47,9 +51,10 @@ export default function HomePage({
         // 无重复，直接添加
         onAccountsAdded(dedupResult.unique);
         onGroupsUpdated(currentGroups);
+        onToast(`成功添加 ${dedupResult.unique.length} 个账户`, "success");
       }
     },
-    [accounts, groups, onAccountsAdded, onGroupsUpdated, onDedupDetected],
+    [accounts, groups, onAccountsAdded, onGroupsUpdated, onDedupDetected, onToast],
   );
 
   /**
@@ -58,14 +63,20 @@ export default function HomePage({
   const handleManualAdd = useCallback(
     (newAccounts: OTPAccount[]) => {
       onAccountsAdded(newAccounts);
+      const name = newAccounts[0]?.name ?? "未知";
+      onToast(`成功添加账户: ${name}`, "success");
     },
-    [onAccountsAdded],
+    [onAccountsAdded, onToast],
   );
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <ImageUploader onAccountsDecoded={handleImageDecoded} />
-      <ManualAddForm onAccountAdded={handleManualAdd} />
+    <div className="pt-6 px-4">
+      <Dashboard accounts={accounts} groups={groups} />
+      <div className="grid gap-6 md:grid-cols-2">
+        <ImageUploader onAccountsDecoded={handleImageDecoded} />
+        <ManualAddForm onAccountAdded={handleManualAdd} />
+      </div>
+      <RecentAccounts accounts={accounts} />
     </div>
   );
 }

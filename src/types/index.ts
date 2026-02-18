@@ -21,6 +21,8 @@ export interface OTPAccount {
   createdAt: number;
   /** 所属分组 ID，默认为 Default_Group 的 ID */
   groupId: string;
+  /** 自定义排序顺序，数字越小越靠前 */
+  order?: number;
 }
 
 /** 分组 */

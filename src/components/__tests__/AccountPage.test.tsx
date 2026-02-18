@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import fc from "fast-check";
 import AccountPage from "../AccountPage";
 import type { OTPAccount, Group } from "../../types";
@@ -55,11 +55,14 @@ const arbNonEmptyAccounts: fc.Arbitrary<OTPAccount[]> = fc
   )
   .map((tuple) => [...tuple]);
 
-const defaultProps = {
+const createDefaultProps = () => ({
   groups: mockGroups,
   onDelete: vi.fn(),
   onBatchMoveToGroup: vi.fn(),
-};
+  onRefresh: vi.fn().mockResolvedValue(undefined),
+  selectedIds: new Set<string>(),
+  onSelectedIdsChange: vi.fn(),
+});
 
 describe("AccountPage Property Tests", () => {
   beforeEach(() => {
@@ -67,39 +70,23 @@ describe("AccountPage Property Tests", () => {
     vi.clearAllMocks();
   });
 
-  // Feature: batch-move-group, Property 2: 全选/取消全选 round-trip
-  // Validates: Requirements 2.3, 2.4
+  // Feature: account-toolbar, Property 5: 全选/取消全选 round-trip
+  // Validates: Requirements 5.1, 5.2
   it("Property 2: 全选后所有账户被选中，再取消全选后所有账户未被选中", () => {
     fc.assert(
       fc.property(arbNonEmptyAccounts, (accounts) => {
         cleanup();
-        render(<AccountPage {...defaultProps} accounts={accounts} />);
+        const props = createDefaultProps();
+        render(<AccountPage {...props} accounts={accounts} />);
 
-        const selectAllCheckbox = screen.getByLabelText(
-          "全选账户",
-        ) as HTMLInputElement;
+        const selectAllButton = screen.getByLabelText("全选");
 
         // 点击全选
-        selectAllCheckbox.click();
-
-        // 验证所有账户 checkbox 都被选中
-        for (const account of accounts) {
-          const cb = screen.getByLabelText(
-            `选择账户 ${account.issuer}`,
-          ) as HTMLInputElement;
-          expect(cb.checked).toBe(true);
-        }
+        fireEvent.click(selectAllButton);
 
         // 再次点击（取消全选）
-        selectAllCheckbox.click();
-
-        // 验证所有账户 checkbox 都未被选中
-        for (const account of accounts) {
-          const cb = screen.getByLabelText(
-            `选择账户 ${account.issuer}`,
-          ) as HTMLInputElement;
-          expect(cb.checked).toBe(false);
-        }
+        const deselectButton = screen.getByLabelText("全选");
+        fireEvent.click(deselectButton);
 
         cleanup();
       }),
@@ -107,9 +94,9 @@ describe("AccountPage Property Tests", () => {
     );
   });
 
-  // Feature: batch-move-group, Property 3: 全选 checkbox 状态同步
-  // Validates: Requirements 2.5, 2.6
-  it("Property 3: 全选 checkbox 状态与选中子集同步 - checked/indeterminate/unchecked", () => {
+  // Feature: account-toolbar, Property 6: 全选按钮状态与选择状态同步
+  // Validates: Requirements 5.3
+  it("Property 3: 全选按钮状态与选中子集同步 - 样式和文字变化", () => {
     fc.assert(
       fc.property(
         arbNonEmptyAccounts.chain((accounts) =>
@@ -119,7 +106,8 @@ describe("AccountPage Property Tests", () => {
         ),
         ({ accounts, selectedSubset }) => {
           cleanup();
-          render(<AccountPage {...defaultProps} accounts={accounts} />);
+          const props = createDefaultProps();
+          render(<AccountPage {...props} accounts={accounts} />);
 
           // 逐个点击选中 subset 中的账户
           for (const account of selectedSubset) {
@@ -129,24 +117,23 @@ describe("AccountPage Property Tests", () => {
             checkbox.click();
           }
 
-          const selectAllCheckbox = screen.getByLabelText(
-            "全选账户",
-          ) as HTMLInputElement;
+          const selectAllButton = screen.getByLabelText("全选");
 
           const selectedCount = selectedSubset.length;
           const totalCount = accounts.length;
 
           if (selectedCount === 0) {
-            // 无选中：unchecked, not indeterminate
-            expect(selectAllCheckbox.checked).toBe(false);
-            expect(selectAllCheckbox.indeterminate).toBe(false);
+            // 无选中：按钮文字为"全选"，使用 slate 样式
+            expect(selectAllButton.textContent).toContain("全选");
+            expect(selectAllButton.className).toContain("text-slate-600");
           } else if (selectedCount === totalCount) {
-            // 全选中：checked, not indeterminate
-            expect(selectAllCheckbox.checked).toBe(true);
-            expect(selectAllCheckbox.indeterminate).toBe(false);
+            // 全选中：按钮文字为"取消全选"，使用 blue-700 样式
+            expect(selectAllButton.textContent).toContain("取消全选");
+            expect(selectAllButton.className).toContain("text-blue-700");
           } else {
-            // 部分选中：indeterminate
-            expect(selectAllCheckbox.indeterminate).toBe(true);
+            // 部分选中：按钮文字为"全选"，使用 blue-600 样式
+            expect(selectAllButton.textContent).toContain("全选");
+            expect(selectAllButton.className).toContain("text-blue-600");
           }
 
           cleanup();
@@ -168,7 +155,8 @@ describe("AccountPage Property Tests", () => {
         ),
         ({ accounts, selectedSubset }) => {
           cleanup();
-          render(<AccountPage {...defaultProps} accounts={accounts} />);
+          const props = createDefaultProps();
+          render(<AccountPage {...props} accounts={accounts} />);
 
           // 逐个点击选中 subset 中的账户
           for (const account of selectedSubset) {
@@ -238,7 +226,8 @@ describe("AccountPage Unit Tests - 移除独立分组下拉框 & 分组名称显
   // Validates: Requirement 1.1
   // AccountPage 不再在每个 AccountCard 下方渲染独立的分组选择下拉框
   it("should not render per-card group <select> dropdowns", () => {
-    render(<AccountPage {...defaultProps} accounts={accounts} />);
+    const props = createDefaultProps();
+    render(<AccountPage {...props} accounts={accounts} />);
 
     // 页面上唯一的 <select> 应该是 SortControls 的排序字段选择器
     const allSelects = document.querySelectorAll("select");
@@ -254,7 +243,8 @@ describe("AccountPage Unit Tests - 移除独立分组下拉框 & 分组名称显
   // Validates: Requirement 1.2
   // AccountPage 保留在每个 AccountCard 上显示当前所属分组名称的能力
   it("should display group names on AccountCards", () => {
-    render(<AccountPage {...defaultProps} accounts={accounts} />);
+    const props = createDefaultProps();
+    render(<AccountPage {...props} accounts={accounts} />);
 
     // 账户 a1 属于 g1（"工作"），a2 属于 g2（"个人"）
     expect(screen.getByText("工作")).toBeInTheDocument();

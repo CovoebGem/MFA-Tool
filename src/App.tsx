@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { Page, OTPAccount, Group, DedupResult } from "./types";
 import Sidebar from "./components/Sidebar";
 import HomePage from "./components/HomePage";
@@ -7,6 +7,8 @@ import GroupPage from "./components/GroupPage";
 import { TempPanel } from "./components/TempPanel";
 import type { TempEntry } from "./components/TempPanel";
 import DedupDialog from "./components/DedupDialog";
+import Toast from "./components/Toast";
+import BackupPanel from "./components/BackupPanel";
 import { useAccounts } from "./hooks/useAccounts";
 import { useGroups } from "./hooks/useGroups";
 import { skipDuplicates, overrideDuplicates } from "./lib/dedup-checker";
@@ -21,6 +23,10 @@ function App() {
     newGroups: Group[];
   } | null>(null);
   const [tempEntries, setTempEntries] = useState<TempEntry[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
+
+  const showToast = useCallback((message: string, type: "success" | "error") => setToast({ message, type }), []);
 
   const {
     accounts,
@@ -29,7 +35,9 @@ function App() {
     error: accountsError,
     addNewAccounts,
     deleteAccount,
+    editAccount,
     batchMoveToGroup,
+    refreshAccounts,
   } = useAccounts();
 
   const {
@@ -84,6 +92,23 @@ function App() {
     await addNewAccounts([account]);
   };
 
+  const handleImportBackup = async (importedAccounts: OTPAccount[], importedGroups: Group[]) => {
+    setAccounts(importedAccounts);
+    setGroups(importedGroups);
+    await saveAccounts(importedAccounts);
+    await saveGroups(importedGroups);
+  };
+
+  const handleReorderAccounts = async (reorderedAccounts: OTPAccount[]) => {
+    setAccounts(reorderedAccounts);
+    await saveAccounts(reorderedAccounts);
+  };
+
+  const handleNavigate = useCallback((page: Page) => {
+    setCurrentPage(page);
+    setSelectedAccountIds(new Set());
+  }, []);
+
   const renderPage = () => {
     switch (currentPage) {
       case "home":
@@ -94,6 +119,7 @@ function App() {
             onAccountsAdded={addNewAccounts}
             onGroupsUpdated={setGroups}
             onDedupDetected={handleDedupDetected}
+            onToast={showToast}
           />
         );
       case "accounts":
@@ -102,7 +128,12 @@ function App() {
             accounts={accounts}
             groups={groups}
             onDelete={deleteAccount}
+            onUpdate={editAccount}
             onBatchMoveToGroup={batchMoveToGroup}
+            onRefresh={refreshAccounts}
+            onReorder={handleReorderAccounts}
+            selectedIds={selectedAccountIds}
+            onSelectedIdsChange={setSelectedAccountIds}
           />
         );
       case "groups":
@@ -114,6 +145,7 @@ function App() {
             onRenameGroup={editGroup}
             onDeleteGroup={handleDeleteGroup}
             onDeleteAccount={deleteAccount}
+            onUpdateAccount={editAccount}
           />
         );
       case "temp":
@@ -122,18 +154,33 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       <Sidebar
         currentPage={currentPage}
-        onNavigate={setCurrentPage}
+        onNavigate={handleNavigate}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
       />
       <main className={`${sidebarCollapsed ? "ml-16" : "ml-48"} min-h-screen transition-all duration-200`}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+            {currentPage === "home" && "首页"}
+            {currentPage === "accounts" && "账户管理"}
+            {currentPage === "groups" && "分组管理"}
+            {currentPage === "temp" && "临时验证"}
+          </h1>
+          <BackupPanel
+            accounts={accounts}
+            groups={groups}
+            selectedAccountIds={currentPage === "accounts" ? selectedAccountIds : undefined}
+            onImport={handleImportBackup}
+            onToast={showToast}
+          />
+        </div>
         {error && (
           <div
             role="alert"
-            className="mx-4 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            className="mx-4 mt-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 px-4 py-3 text-sm text-red-700 dark:text-red-400"
           >
             {error}
           </div>
@@ -161,7 +208,7 @@ function App() {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
               />
             </svg>
-            <span className="ml-3 text-gray-500">加载中...</span>
+            <span className="ml-3 text-gray-500 dark:text-gray-400">加载中...</span>
           </div>
         ) : (
           renderPage()
@@ -173,6 +220,13 @@ function App() {
           onSkip={handleDedupSkip}
           onOverride={handleDedupOverride}
           onCancel={handleDedupCancel}
+        />
+      )}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
         />
       )}
     </div>

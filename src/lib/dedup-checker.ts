@@ -1,5 +1,11 @@
 import type { OTPAccount, DedupResult } from "../types";
 
+/** 内部重复检测的分组结果 */
+export interface DuplicateGroup {
+  accounts: OTPAccount[];
+  matchType: "secret" | "name_issuer";
+}
+
 /**
  * 检测导入账户中的重复项
  * 优先匹配 secret 字段，其次匹配 name + issuer 组合
@@ -64,3 +70,52 @@ export function overrideDuplicates(
 
   return [...updated, ...result.unique];
 }
+
+/**
+ * 检测账户列表内部的重复项
+ * 按 secret 和 name+issuer 分组，返回存在重复的分组
+ */
+export function findInternalDuplicates(
+  accounts: OTPAccount[],
+): DuplicateGroup[] {
+  const groups: DuplicateGroup[] = [];
+
+  // 按 secret 分组
+  const bySecret = new Map<string, OTPAccount[]>();
+  for (const account of accounts) {
+    const key = account.secret;
+    if (!bySecret.has(key)) {
+      bySecret.set(key, []);
+    }
+    bySecret.get(key)!.push(account);
+  }
+  for (const accs of bySecret.values()) {
+    if (accs.length > 1) {
+      groups.push({ accounts: accs, matchType: "secret" });
+    }
+  }
+
+  // 按 name+issuer 分组（排除已被 secret 匹配的重复对）
+  const byNameIssuer = new Map<string, OTPAccount[]>();
+  for (const account of accounts) {
+    const key = `${account.name}\0${account.issuer}`;
+    if (!byNameIssuer.has(key)) {
+      byNameIssuer.set(key, []);
+    }
+    byNameIssuer.get(key)!.push(account);
+  }
+  for (const accs of byNameIssuer.values()) {
+    if (accs.length > 1) {
+      // 过滤掉所有账户都已在同一个 secret 分组中的情况
+      const secrets = new Set(accs.map((a) => a.secret));
+      if (secrets.size === 1) {
+        // 所有账户 secret 相同，已被 secret 分组覆盖，跳过
+        continue;
+      }
+      groups.push({ accounts: accs, matchType: "name_issuer" });
+    }
+  }
+
+  return groups;
+}
+

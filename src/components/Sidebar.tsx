@@ -1,5 +1,8 @@
 import type { Page } from "../types";
 import type { ReactNode } from "react";
+import ThemeToggle from "./ThemeToggle";
+import LocaleToggle from "./LocaleToggle";
+import { useI18n } from "../contexts/I18nContext";
 
 interface SidebarProps {
   currentPage: Page;
@@ -128,29 +131,32 @@ function ChevronRightIcon({ className }: { className?: string }) {
   );
 }
 
-const navItems: { page: Page; icon: (props: { className?: string }) => ReactNode; label: string }[] = [
-  { page: "home", icon: HomeIcon, label: "首页" },
-  { page: "accounts", icon: UserIcon, label: "账户" },
-  { page: "groups", icon: FolderIcon, label: "分组" },
-  { page: "temp", icon: ClockIcon, label: "临时" },
-];
-
 export default function Sidebar({
   currentPage,
   onNavigate,
   collapsed,
   onToggleCollapse,
 }: SidebarProps) {
+  const { t } = useI18n();
+
+  const navItems: { page: Page; icon: (props: { className?: string }) => ReactNode; labelKey: string }[] = [
+    { page: "home", icon: HomeIcon, labelKey: "nav.home" },
+    { page: "accounts", icon: UserIcon, labelKey: "nav.accounts" },
+    { page: "groups", icon: FolderIcon, labelKey: "nav.groups" },
+    { page: "temp", icon: ClockIcon, labelKey: "nav.temp" },
+  ];
+
   return (
     <nav
-      className={`fixed left-0 top-0 flex h-screen flex-col bg-white border-r border-gray-200 py-6 transition-all duration-200 ${
+      className={`fixed left-0 top-0 flex h-screen flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 transition-all duration-200 ${
         collapsed ? "w-16 items-center" : "w-48"
       }`}
       aria-label="主导航"
     >
       <div className={`flex flex-1 flex-col ${collapsed ? "items-center" : "px-3"}`}>
-        {navItems.map(({ page, icon: Icon, label }) => {
+        {navItems.map(({ page, icon: Icon, labelKey }) => {
           const isActive = currentPage === page;
+          const label = t(labelKey);
           return (
             <button
               key={page}
@@ -161,8 +167,8 @@ export default function Sidebar({
                   : "w-full gap-3 px-3 py-2"
               } ${
                 isActive
-                  ? "bg-blue-50 text-blue-600"
-                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                  : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100"
               }`}
               aria-current={isActive ? "page" : undefined}
               title={label}
@@ -174,10 +180,16 @@ export default function Sidebar({
         })}
       </div>
 
-      <div className={`mt-auto ${collapsed ? "flex justify-center" : "px-3"}`}>
+      <div className={`mt-auto ${collapsed ? "flex flex-col items-center gap-2" : "px-3 space-y-2"}`}>
+        {!collapsed && (
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <LocaleToggle />
+          </div>
+        )}
         <button
           onClick={onToggleCollapse}
-          className="flex w-full items-center justify-center rounded-lg px-2 py-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          className="flex w-full items-center justify-center rounded-lg px-2 py-2 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100"
           aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
           title={collapsed ? "展开侧边栏" : "收起侧边栏"}
         >

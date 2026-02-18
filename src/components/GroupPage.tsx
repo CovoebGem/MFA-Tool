@@ -15,6 +15,7 @@ interface GroupPageProps {
   onRenameGroup: (groupId: string, newName: string) => void;
   onDeleteGroup: (groupId: string) => void;
   onDeleteAccount: (id: string) => void;
+  onUpdateAccount?: (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>) => void;
 }
 
 export default function GroupPage({
@@ -24,6 +25,7 @@ export default function GroupPage({
   onRenameGroup,
   onDeleteGroup,
   onDeleteAccount,
+  onUpdateAccount,
 }: GroupPageProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showManager, setShowManager] = useState(false);
@@ -104,7 +106,7 @@ export default function GroupPage({
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {selectedAccounts.map((account) => (
-              <AccountCard key={account.id} account={account} onDelete={onDeleteAccount} />
+              <AccountCard key={account.id} account={account} onDelete={onDeleteAccount} onUpdate={onUpdateAccount} />
             ))}
           </div>
         )

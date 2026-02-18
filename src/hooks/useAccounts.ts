@@ -5,6 +5,7 @@ import {
   saveAccounts,
   addAccounts,
   removeAccount,
+  updateAccount,
   moveAccountToGroup,
   moveAccountsToGroup,
 } from "../lib/account-manager";
@@ -117,6 +118,42 @@ export function useAccounts() {
     [accounts],
   );
 
+  const refreshAccounts = useCallback(async () => {
+    try {
+      setError(null);
+      const data = await loadAccounts();
+      let needsMigration = false;
+      const migrated = data.map((account) => {
+        if (!account.groupId) {
+          needsMigration = true;
+          return { ...account, groupId: DEFAULT_GROUP_ID };
+        }
+        return account;
+      });
+      setAccounts(migrated);
+      if (needsMigration) {
+        await saveAccounts(migrated);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "刷新账户失败");
+      throw err;
+    }
+  }, []);
+
+  const editAccount = useCallback(
+    async (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>) => {
+      try {
+        setError(null);
+        const updated = updateAccount(accounts, id, updates);
+        setAccounts(updated);
+        await saveAccounts(updated);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "编辑账户失败");
+      }
+    },
+    [accounts],
+  );
+
   return {
     accounts,
     setAccounts,
@@ -124,8 +161,10 @@ export function useAccounts() {
     error,
     addNewAccounts,
     deleteAccount,
+    editAccount,
     moveToGroup,
     batchMoveToGroup,
     detectDuplicates,
+    refreshAccounts,
   };
 }
