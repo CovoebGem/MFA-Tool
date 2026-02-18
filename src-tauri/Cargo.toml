@@ -1,6 +1,6 @@
 [package]
 name = "twofa-tool"
-version = "0.1.0"
+version = "0.2.0"
 description = "2FA Tool Desktop Application"
 authors = ["you"]
 license = ""
