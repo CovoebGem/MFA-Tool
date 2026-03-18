@@ -52,11 +52,16 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tauriScript: npx tauri
           args: ${{ matrix.args }}
           tagName: ${{ github.ref_name }}
           releaseName: "MFA Tool ${{ github.ref_name }}"
-          releaseBody: "下载对应平台的安装包即可使用。"
+          releaseBody: |
+            下载对应平台的安装包即可使用。
+            该版本会同步生成应用内更新所需的 latest.json 与签名文件。
           releaseDraft: false
           prerelease: false
+          uploadUpdaterJson: true

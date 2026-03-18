@@ -80,6 +80,8 @@ npm run build
 npm run tauri -- build
 ```
 
+> 当前项目已启用 Tauri updater。只要客户端版本中已经包含该能力，后续 GitHub Release 发布完成后，应用启动时或点击“检查更新”时就会读取 Release 附带的 `latest.json` 来发现新版本。
+
 ### 桌面端构建命令
 
 ```bash
@@ -133,20 +135,29 @@ npm run test:watch
 - `src-tauri/tauri.conf.json`
 - `CHANGELOG.md`
 
-### 2. 推送主分支
+### 2. 确认 updater 签名密钥
+
+GitHub Actions 在构建 release 时会为 updater 产物签名。发布前需要在仓库 Secrets 中准备：
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（如果私钥无密码，可以不设置）
+
+当前仓库使用的 updater 公钥已经写入 `src-tauri/tauri.conf.json`，对应私钥需由维护者安全保存。若私钥丢失，后续版本将无法继续被旧客户端信任。
+
+### 3. 推送主分支
 
 ```bash
 git push origin main
 ```
 
-### 3. 创建并推送发布标签
+### 4. 创建并推送发布标签
 
 ```bash
 git tag v0.3.0
 git push origin v0.3.0
 ```
 
-### 4. 等待 GitHub Actions 构建
+### 5. 等待 GitHub Actions 构建
 
 仓库中的工作流会在推送 `v*` 标签后自动执行，目标平台包括：
 
@@ -155,7 +166,13 @@ git push origin v0.3.0
 - macOS Intel
 - Linux
 
-构建成功后，产物会自动附加到对应 GitHub Release。
+构建成功后，产物会自动附加到对应 GitHub Release，并额外上传：
+
+- `latest.json`
+- `latest.json.sig`
+- 各平台安装包对应的签名文件
+
+其中 GitHub Release 的描述文案会作为客户端弹窗里的“更新说明”来源，建议发版时认真填写。
 
 ## 仅构建前端
 
