@@ -2,11 +2,11 @@
 
 一个基于 Tauri 2 + React 19 + TypeScript 构建的本地优先桌面验证器，用来管理 TOTP 两步验证账户、导入二维码并生成实时验证码。
 
-> 当前安装包内的应用名称仍为 `2FA Tool`，这样可以保持现有桌面端包名和本地数据目录兼容；仓库和开源文档统一使用 `MFA Tool` 这个项目名。
+> 本次重命名后，桌面端应用名、仓库名和构建产物统一为 `MFA Tool`。应用启动时会尝试把旧 `2fa-web-tool` 标识符下的本地数据迁移到新目录。
 
 ## 界面预览
 
-![MFA Tool 界面预览](./2FA%20tools.png)
+![MFA Tool 界面预览](./MFA-Tool.png)
 
 ## 核心功能
 
@@ -105,8 +105,8 @@ npm test
 npm run build
 npm run tauri -- build
 git push origin main
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 仓库内已经包含 GitHub Actions 工作流：当推送 `v*` 标签时，会自动构建 Windows、macOS 和 Linux 的桌面产物并附加到对应 Release。

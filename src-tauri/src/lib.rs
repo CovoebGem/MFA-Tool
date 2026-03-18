@@ -1,10 +1,41 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
+
+const LEGACY_APP_IDENTIFIER: &str = "com.twofa-web-tool.desktop";
+const DATA_FILES: [&str; 2] = ["accounts.json", "groups.json"];
+
+fn migrate_legacy_data(app: &tauri::AppHandle, data_dir: &Path) -> Result<(), String> {
+    let current_base = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let Some(parent_dir) = current_base.parent() else {
+        return Ok(());
+    };
+
+    let legacy_data_dir = parent_dir.join(LEGACY_APP_IDENTIFIER).join("data");
+    if !legacy_data_dir.exists() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
+
+    for file_name in DATA_FILES {
+        let source_path = legacy_data_dir.join(file_name);
+        let target_path = data_dir.join(file_name);
+
+        if source_path.exists() && !target_path.exists() {
+            fs::copy(&source_path, &target_path).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
+}
 
 fn get_data_dir(app: &tauri::AppHandle) -> PathBuf {
     let base = app.path().app_data_dir().expect("failed to get app data dir");
     let data_dir = base.join("data");
+    if !data_dir.exists() {
+        migrate_legacy_data(app, &data_dir).expect("failed to migrate legacy data dir");
+    }
     if !data_dir.exists() {
         fs::create_dir_all(&data_dir).expect("failed to create data dir");
     }

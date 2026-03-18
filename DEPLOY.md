@@ -1,6 +1,6 @@
 # MFA Tool 构建与发布文档
 
-> 仓库名使用 `MFA Tool`，当前桌面安装包名称仍为 `2FA Tool`，这样可以保持现有打包产物和本地数据目录兼容。
+> 本次重命名后，仓库名、桌面应用名和构建产物统一为 `MFA Tool`。应用启动时会自动尝试迁移旧 `2fa-web-tool` 标识符目录下的本地数据。
 
 ## 开发环境搭建
 
@@ -142,8 +142,8 @@ git push origin main
 ### 3. 创建并推送发布标签
 
 ```bash
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 ### 4. 等待 GitHub Actions 构建

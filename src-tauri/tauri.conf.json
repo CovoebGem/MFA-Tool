@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "2FA Tool",
-  "version": "0.2.1",
-  "identifier": "com.twofa-web-tool.desktop",
+  "productName": "MFA Tool",
+  "version": "0.3.0",
+  "identifier": "com.mfa-tool.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:19872",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "2FA Tool",
+        "title": "MFA Tool",
         "width": 800,
         "height": 600,
         "resizable": true,

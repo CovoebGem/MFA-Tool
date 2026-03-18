@@ -5,7 +5,7 @@ import { parseOtpauthUrl } from "./migration-parser";
 import type { OTPAccount } from "../types";
 
 /**
- * Feature: 2fa-web-tool, Property 2: otpauth URL round-trip
+ * Feature: mfa-tool, Property 2: otpauth URL round-trip
  * Validates: Requirements 2.2, 6.1, 6.2
  *
  * 对于任意有效的 OTPAccount（随机 issuer、name、base32 secret、type），

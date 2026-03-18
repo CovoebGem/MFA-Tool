@@ -1,7 +1,7 @@
 {
-  "name": "2fa-web-tool",
+  "name": "mfa-tool",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Desktop TOTP authenticator built with Tauri and React",
   "license": "MIT",
   "repository": {

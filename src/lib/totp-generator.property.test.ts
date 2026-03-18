@@ -3,7 +3,7 @@ import * as fc from 'fast-check';
 import { generateTOTP, getRemainingSeconds } from './totp-generator';
 
 /**
- * Feature: 2fa-web-tool, Property 7: TOTP 生成格式正确
+ * Feature: mfa-tool, Property 7: TOTP 生成格式正确
  * Validates: Requirements 4.1
  *
  * 对于任意有效的 base32 编码密钥（长度至少 16 字符），
@@ -26,7 +26,7 @@ describe('Property 7: TOTP 生成格式正确', () => {
 });
 
 /**
- * Feature: 2fa-web-tool, Property 8: 剩余秒数范围
+ * Feature: mfa-tool, Property 8: 剩余秒数范围
  * Validates: Requirements 4.3
  *
  * 对于任意时间步长 period（1 到 60 之间的正整数），

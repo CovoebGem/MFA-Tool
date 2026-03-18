@@ -3,7 +3,7 @@ import * as fc from 'fast-check';
 import { isValidBase32 } from './validators';
 
 /**
- * Feature: 2fa-web-tool, Property 6: 无效 base32 拒绝
+ * Feature: mfa-tool, Property 6: 无效 base32 拒绝
  * Validates: Requirements 2.3
  *
  * 对于任意包含非 base32 字符（即不在 A-Z、2-7 范围内的字符）的字符串，

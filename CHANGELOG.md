@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.0 - 2026-03-19
+
+### Changed
+
+- 项目目录、包名、桌面应用名、发布名统一重命名为 `MFA Tool` / `mfa-tool`。
+- Tauri bundle identifier 更新为 `com.mfa-tool.desktop`。
+- 启动时自动尝试从旧 `com.twofa-web-tool.desktop` 数据目录迁移账户与分组数据。
+- 截图资源、README、部署文档和 GitHub Release 文案同步改名。
+
+### Release
+
+- 推荐通过推送 `v0.3.0` 这样的标签触发 GitHub Actions。
+- GitHub Actions 会为 Windows、macOS 和 Linux 构建桌面端安装包。
+
 ## v0.2.1 - 2026-03-19
 
 ### Changed

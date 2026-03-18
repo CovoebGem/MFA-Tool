@@ -1,6 +1,6 @@
 [package]
-name = "twofa-tool"
-version = "0.2.1"
+name = "mfa-tool"
+version = "0.3.0"
 description = "MFA Tool desktop authenticator built with Tauri"
 authors = ["CovoebGem"]
 license = "MIT"
@@ -9,7 +9,7 @@ edition = "2021"
 rust-version = "1.77.2"
 
 [lib]
-name = "twofa_tool_lib"
+name = "mfa_tool_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

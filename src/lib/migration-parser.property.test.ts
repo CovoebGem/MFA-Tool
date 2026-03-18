@@ -4,7 +4,7 @@ import protobuf from "protobufjs";
 import { parseMigrationUrl, bytesToBase32 } from "./migration-parser";
 
 /**
- * Feature: 2fa-web-tool, Property 1: Migration URL round-trip
+ * Feature: mfa-tool, Property 1: Migration URL round-trip
  * Validates: Requirements 1.2, 1.3
  *
  * 对于任意有效的 OTP 参数列表（包含随机的 secret 字节、name、issuer、type 和 counter），
