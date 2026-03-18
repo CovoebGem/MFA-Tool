@@ -9,6 +9,7 @@ import type { TempEntry } from "./components/TempPanel";
 import DedupDialog from "./components/DedupDialog";
 import Toast from "./components/Toast";
 import BackupPanel from "./components/BackupPanel";
+import AppUpdateManager from "./components/AppUpdateManager";
 import { useAccounts } from "./hooks/useAccounts";
 import { useGroups } from "./hooks/useGroups";
 import { skipDuplicates, overrideDuplicates } from "./lib/dedup-checker";
@@ -174,13 +175,16 @@ function App() {
             {currentPage === "groups" && "分组管理"}
             {currentPage === "temp" && "临时验证"}
           </h1>
-          <BackupPanel
-            accounts={accounts}
-            groups={groups}
-            selectedAccountIds={currentPage === "accounts" ? selectedAccountIds : undefined}
-            onImport={handleImportBackup}
-            onToast={showToast}
-          />
+          <div className="flex items-center gap-2">
+            <AppUpdateManager onToast={showToast} />
+            <BackupPanel
+              accounts={accounts}
+              groups={groups}
+              selectedAccountIds={currentPage === "accounts" ? selectedAccountIds : undefined}
+              onImport={handleImportBackup}
+              onToast={showToast}
+            />
+          </div>
         </div>
         {error && (
           <div

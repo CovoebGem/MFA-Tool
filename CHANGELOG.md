@@ -7,6 +7,8 @@
 - 项目目录、包名、桌面应用名、发布名统一重命名为 `MFA Tool` / `mfa-tool`。
 - Tauri bundle identifier 更新为 `com.mfa-tool.desktop`。
 - 启动时自动尝试从旧 `com.twofa-web-tool.desktop` 数据目录迁移账户与分组数据。
+- 接入 GitHub Releases 驱动的应用内更新：客户端可自动检查新版本、查看更新说明、下载并重启完成升级。
+- GitHub Actions 现在会同步上传 updater 所需的 `latest.json` 与签名文件。
 - 截图资源、README、部署文档和 GitHub Release 文案同步改名。
 
 ### Release

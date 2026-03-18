@@ -17,6 +17,7 @@
 - 自动排序与拖拽自定义排序
 - 临时验证码面板，适合一次性查看和复制
 - 本地 JSON 备份导入导出
+- GitHub Release 驱动的应用内检查更新与一键升级
 - 所有账号数据默认只保存在本机应用数据目录
 
 ## 支持平台
@@ -74,6 +75,13 @@ npm run tauri -- build
 - 在账户页勾选后支持仅导出选中账户
 - 备份文件为 JSON，可重新导入恢复
 
+### 应用更新
+
+- 桌面端启动后会自动检查 GitHub Releases 中是否有新版本
+- 顶栏提供“检查更新”入口，可手动重新检测
+- 发现新版本后会弹出更新说明，支持下载、安装并重启进入新版本
+- 更新说明来自 GitHub Release body；如果你希望客户端展示更详细的更新日志，请在发版时写清楚 Release 描述
+
 ## 技术栈
 
 - 前端：React 19、TypeScript、Vite 8、Tailwind CSS 4
@@ -109,7 +117,14 @@ git tag v0.3.0
 git push origin v0.3.0
 ```
 
-仓库内已经包含 GitHub Actions 工作流：当推送 `v*` 标签时，会自动构建 Windows、macOS 和 Linux 的桌面产物并附加到对应 Release。
+仓库内已经包含 GitHub Actions 工作流：当推送 `v*` 标签时，会自动构建 Windows、macOS 和 Linux 的桌面产物，附加到对应 Release，并额外上传 `latest.json` 及签名文件供客户端应用内更新使用。
+
+在第一次使用应用内更新前，需要先在 GitHub 仓库 Secrets 中配置：
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（如果私钥无密码，可留空或不设置）
+
+本地已为当前仓库生成 updater 公钥并写入 `src-tauri/tauri.conf.json`；私钥不会进入仓库，请妥善保管。
 
 ## 隐私与数据
 
