@@ -1,4 +1,6 @@
-# 2FA Web Tool 构建与部署文档
+# MFA Tool 构建与发布文档
+
+> 仓库名使用 `MFA Tool`，当前桌面安装包名称仍为 `2FA Tool`，这样可以保持现有打包产物和本地数据目录兼容。
 
 ## 开发环境搭建
 
@@ -63,20 +65,36 @@ sudo apt install -y \
 npm install
 
 # 启动 Tauri 开发模式（同时启动前端 dev server 和 Tauri 窗口）
-npm run tauri dev
+npm run tauri -- dev
 ```
 
-开发模式下前端运行在 `http://localhost:5173`，支持热更新。
+开发模式下前端运行在 `http://localhost:19872`，支持热更新。
 
-## 构建
+## 本地验证与构建
 
-### 构建命令
+建议在发版前按下面顺序执行：
 
 ```bash
-npm run tauri build
+npm test
+npm run build
+npm run tauri -- build
+```
+
+### 桌面端构建命令
+
+```bash
+npm run tauri -- build
 ```
 
 此命令会先执行 `npm run build` 构建前端，然后编译 Rust 后端并打包为桌面安装包。
+
+如果是在 CI、SSH 会话或无 Finder/无图形桌面的 macOS 环境中构建 DMG，建议改用：
+
+```bash
+CI=true npm run tauri -- build
+```
+
+这样 Tauri bundler 会走更适合无头环境的 DMG 打包路径。
 
 ### 构建产物位置
 
@@ -102,6 +120,42 @@ npm test
 # 监听模式
 npm run test:watch
 ```
+
+## GitHub 发布流程
+
+### 1. 更新版本号
+
+需要同步以下文件中的版本：
+
+- `package.json`
+- `package-lock.json`
+- `src-tauri/Cargo.toml`
+- `src-tauri/tauri.conf.json`
+- `CHANGELOG.md`
+
+### 2. 推送主分支
+
+```bash
+git push origin main
+```
+
+### 3. 创建并推送发布标签
+
+```bash
+git tag v0.2.1
+git push origin v0.2.1
+```
+
+### 4. 等待 GitHub Actions 构建
+
+仓库中的工作流会在推送 `v*` 标签后自动执行，目标平台包括：
+
+- Windows
+- macOS Apple Silicon
+- macOS Intel
+- Linux
+
+构建成功后，产物会自动附加到对应 GitHub Release。
 
 ## 仅构建前端
 

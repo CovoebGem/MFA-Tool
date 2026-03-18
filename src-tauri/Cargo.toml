@@ -1,10 +1,10 @@
 [package]
 name = "twofa-tool"
-version = "0.2.0"
-description = "2FA Tool Desktop Application"
-authors = ["you"]
-license = ""
-repository = ""
+version = "0.2.1"
+description = "MFA Tool desktop authenticator built with Tauri"
+authors = ["CovoebGem"]
+license = "MIT"
+repository = "https://github.com/CovoebGem/MFA-Tool"
 edition = "2021"
 rust-version = "1.77.2"
 

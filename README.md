@@ -1,52 +1,127 @@
-# 2FA Tool
+# MFA Tool
 
-一个基于 Tauri + React + TypeScript 构建的桌面端 TOTP 两步验证工具。
+一个基于 Tauri 2 + React 19 + TypeScript 构建的本地优先桌面验证器，用来管理 TOTP 两步验证账户、导入二维码并生成实时验证码。
 
-## 功能
+> 当前安装包内的应用名称仍为 `2FA Tool`，这样可以保持现有桌面端包名和本地数据目录兼容；仓库和开源文档统一使用 `MFA Tool` 这个项目名。
 
-- 管理 TOTP 账户，生成实时验证码
-- 支持扫描二维码 / 手动输入密钥 / otpauth:// URL 导入
-- 支持 Google Authenticator 迁移数据导入
-- 账户分组管理
-- 批量操作（移动、删除）
-- 重复账户检测
-- 排序与搜索
-- 数据本地存储，隐私安全
+## 界面预览
 
-## 技术栈
+![MFA Tool 界面预览](./2FA%20tools.png)
 
-- 前端：React 19 + TypeScript + Tailwind CSS
-- 桌面：Tauri 2
-- 构建：Vite
-- 测试：Vitest + fast-check
+## 核心功能
 
-## 开发
+- 扫描二维码图片、粘贴截图或拖拽图片导入 OTP 账户
+- 支持 `otpauth://` URL 和 Google Authenticator migration 数据解析
+- 手动录入 Base32 密钥，快速补录账号
+- 账户分组、批量移动、重复账户检测
+- 自动排序与拖拽自定义排序
+- 临时验证码面板，适合一次性查看和复制
+- 本地 JSON 备份导入导出
+- 所有账号数据默认只保存在本机应用数据目录
+
+## 支持平台
+
+- Windows：`.msi` / `.exe`
+- macOS：`.app` / `.dmg`（Apple Silicon、Intel）
+- Linux：`.AppImage` / `.deb`
+
+下载入口：
+[GitHub Releases](https://github.com/CovoebGem/MFA-Tool/releases)
+
+## 快速开始
 
 ```bash
 # 安装依赖
 npm install
 
-# 启动开发服务器（Web）
+# 启动前端开发服务器
 npm run dev
 
 # 启动 Tauri 开发模式
-npm run tauri dev
+npm run tauri -- dev
 
 # 运行测试
 npm test
 
-# 构建桌面应用
-npm run tauri build
+# 构建前端
+npm run build
+
+# 构建桌面端安装包
+npm run tauri -- build
 ```
 
-## 下载
+开发模式下的前端端口固定为 `http://localhost:19872`，和 Tauri 配置保持一致。
 
-前往 [Releases](https://github.com/CovoebGem/2fa-web-tool/releases) 下载各平台安装包：
+## 使用说明
 
-- Windows: `.msi` / `.exe`
-- macOS: `.dmg`（Intel / Apple Silicon）
-- Linux: `.AppImage` / `.deb`
+### 导入账户
+
+- 首页支持点击上传、拖拽图片、`Ctrl+V` 粘贴二维码截图
+- 也支持手动输入 Base32 密钥
+- 支持直接粘贴 `otpauth://` URL
+- 遇到 Google Authenticator 导出的迁移二维码，会自动解析成多个账户
+
+### 管理账户
+
+- 可以按名称、服务商、创建时间自动排序
+- 也可以切换到拖拽模式手动排序
+- 支持账户编辑、删除、批量移动分组
+- 导入时会自动检测重复账户
+
+### 备份与恢复
+
+- 支持导出全部账户
+- 在账户页勾选后支持仅导出选中账户
+- 备份文件为 JSON，可重新导入恢复
+
+## 技术栈
+
+- 前端：React 19、TypeScript、Vite 8、Tailwind CSS 4
+- 桌面端：Tauri 2
+- 测试：Vitest、Testing Library、fast-check
+- OTP 生成：`otpauth`
+- 二维码解析：`jsqr`
+
+## 项目结构
+
+```text
+src/
+  components/   页面和 UI 组件
+  hooks/        状态逻辑与定时刷新
+  lib/          解析、校验、排序、备份、去重等纯逻辑
+  contexts/     i18n 上下文
+  types/        领域模型与错误类型
+src-tauri/
+  src/          Rust 后端与 Tauri 命令
+  icons/        打包图标资源
+```
+
+## 发布流程
+
+发布前建议按下面顺序执行：
+
+```bash
+npm test
+npm run build
+npm run tauri -- build
+git push origin main
+git tag v0.2.1
+git push origin v0.2.1
+```
+
+仓库内已经包含 GitHub Actions 工作流：当推送 `v*` 标签时，会自动构建 Windows、macOS 和 Linux 的桌面产物并附加到对应 Release。
+
+## 隐私与数据
+
+- 账户数据默认保存在本机 Tauri 应用数据目录
+- 当前版本不依赖远程同步服务
+- 备份文件是明文 JSON，请自行妥善保存
+
+## 文档
+
+- [部署与发版说明](./DEPLOY.md)
+- [更新日志](./CHANGELOG.md)
 
 ## License
 
-MIT
+[MIT](./LICENSE)

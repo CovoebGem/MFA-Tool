@@ -1,7 +1,17 @@
 {
   "name": "2fa-web-tool",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
+  "description": "Desktop TOTP authenticator built with Tauri and React",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CovoebGem/MFA-Tool.git"
+  },
+  "homepage": "https://github.com/CovoebGem/MFA-Tool#readme",
+  "bugs": {
+    "url": "https://github.com/CovoebGem/MFA-Tool/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

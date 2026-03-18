@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import fc from "fast-check";
+import { useState } from "react";
 import AccountPage from "../AccountPage";
 import type { OTPAccount, Group } from "../../types";
 
@@ -64,6 +65,25 @@ const createDefaultProps = () => ({
   onSelectedIdsChange: vi.fn(),
 });
 
+function renderWithSelectionState(accounts: OTPAccount[]) {
+  const props = createDefaultProps();
+
+  function Harness() {
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    return (
+      <AccountPage
+        {...props}
+        accounts={accounts}
+        selectedIds={selectedIds}
+        onSelectedIdsChange={setSelectedIds}
+      />
+    );
+  }
+
+  return render(<Harness />);
+}
+
 describe("AccountPage Property Tests", () => {
   beforeEach(() => {
     cleanup();
@@ -76,17 +96,20 @@ describe("AccountPage Property Tests", () => {
     fc.assert(
       fc.property(arbNonEmptyAccounts, (accounts) => {
         cleanup();
-        const props = createDefaultProps();
-        render(<AccountPage {...props} accounts={accounts} />);
+        renderWithSelectionState(accounts);
 
         const selectAllButton = screen.getByLabelText("全选");
 
         // 点击全选
-        fireEvent.click(selectAllButton);
+        act(() => {
+          fireEvent.click(selectAllButton);
+        });
 
         // 再次点击（取消全选）
         const deselectButton = screen.getByLabelText("全选");
-        fireEvent.click(deselectButton);
+        act(() => {
+          fireEvent.click(deselectButton);
+        });
 
         cleanup();
       }),
@@ -106,15 +129,16 @@ describe("AccountPage Property Tests", () => {
         ),
         ({ accounts, selectedSubset }) => {
           cleanup();
-          const props = createDefaultProps();
-          render(<AccountPage {...props} accounts={accounts} />);
+          renderWithSelectionState(accounts);
 
           // 逐个点击选中 subset 中的账户
           for (const account of selectedSubset) {
             const checkbox = screen.getByLabelText(
               `选择账户 ${account.issuer}`,
             );
-            checkbox.click();
+            act(() => {
+              fireEvent.click(checkbox);
+            });
           }
 
           const selectAllButton = screen.getByLabelText("全选");
@@ -155,15 +179,16 @@ describe("AccountPage Property Tests", () => {
         ),
         ({ accounts, selectedSubset }) => {
           cleanup();
-          const props = createDefaultProps();
-          render(<AccountPage {...props} accounts={accounts} />);
+          renderWithSelectionState(accounts);
 
           // 逐个点击选中 subset 中的账户
           for (const account of selectedSubset) {
             const checkbox = screen.getByLabelText(
               `选择账户 ${account.issuer}`,
             );
-            checkbox.click();
+            act(() => {
+              fireEvent.click(checkbox);
+            });
           }
 
           const selectedCount = selectedSubset.length;

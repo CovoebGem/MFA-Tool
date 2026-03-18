@@ -112,6 +112,27 @@ describe("Property 1: Migration URL round-trip", () => {
     return digitValue === 2 ? 8 : 6;
   }
 
+  function expectedIssuerAndName(issuer: string, name: string) {
+    const normalizedIssuer = issuer.trim();
+    const normalizedName = name.trim();
+
+    if (!normalizedName.includes(":")) {
+      return {
+        issuer: normalizedIssuer,
+        name: normalizedName,
+      };
+    }
+
+    const colonIndex = normalizedName.indexOf(":");
+    const labelIssuer = normalizedName.slice(0, colonIndex).trim();
+    const labelName = normalizedName.slice(colonIndex + 1).trim();
+
+    return {
+      issuer: normalizedIssuer || labelIssuer,
+      name: labelName || normalizedName,
+    };
+  }
+
   it("should round-trip arbitrary OTP params through protobuf serialization and parseMigrationUrl", () => {
     fc.assert(
       fc.property(otpParamsListArb, (params) => {
@@ -128,9 +149,13 @@ describe("Property 1: Migration URL round-trip", () => {
           // secret 应为原始字节的 base32 编码
           expect(parsed.secret).toBe(bytesToBase32(original.secret));
 
-          // name、issuer 应一致
-          expect(parsed.name).toBe(original.name);
-          expect(parsed.issuer).toBe(original.issuer);
+          // name、issuer 会经过 parser 的 trim 和 label 归一化
+          const expected = expectedIssuerAndName(
+            original.issuer,
+            original.name,
+          );
+          expect(parsed.name).toBe(expected.name);
+          expect(parsed.issuer).toBe(expected.issuer);
 
           // type 映射正确
           expect(parsed.type).toBe(expectedType(original.type));
