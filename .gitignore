@@ -30,3 +30,17 @@ src-tauri/target/
 icon-square-tmp.png
 2FA-trimmed.png
 2FA-square.png
+
+# Local collaboration / private docs
+AGENTS.md
+CLAUDE.md
+.claude/
+邮件方案.md
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Local workflow draft
+.github/workflows/build.yml

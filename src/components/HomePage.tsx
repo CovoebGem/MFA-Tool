@@ -10,8 +10,8 @@ import type { OTPAccount, Group, DedupResult } from "../types";
 interface HomePageProps {
   accounts: OTPAccount[];
   groups: Group[];
-  onAccountsAdded: (accounts: OTPAccount[]) => void;
-  onGroupsUpdated: (groups: Group[]) => void;
+  onAccountsAdded: (accounts: OTPAccount[]) => Promise<void>;
+  onGroupsUpdated: (groups: Group[]) => Promise<void>;
   onDedupDetected: (result: DedupResult, newGroups: Group[]) => void;
   onToast: (message: string, type: "success" | "error") => void;
 }
@@ -31,10 +31,10 @@ export default function HomePage({
    * 3. 有重复 → onDedupDetected；无重复 → 直接添加
    */
   const handleImageDecoded = useCallback(
-    (decoded: OTPAccount[]) => {
+    async (decoded: OTPAccount[]) => {
       let currentGroups = groups;
 
-      // 为每个账户分配 groupId
+      // 为每个账户按服务商分配 groupId
       const grouped = decoded.map((account) => {
         const result = findOrCreateGroupByIssuer(currentGroups, account.issuer);
         currentGroups = result.groups;
@@ -48,9 +48,12 @@ export default function HomePage({
         // 有重复，交给父组件处理（显示 DedupDialog）
         onDedupDetected(dedupResult, currentGroups);
       } else {
-        // 无重复，直接添加
-        onAccountsAdded(dedupResult.unique);
-        onGroupsUpdated(currentGroups);
+        const tasks = [onAccountsAdded(dedupResult.unique)];
+        if (currentGroups !== groups) {
+          tasks.push(onGroupsUpdated(currentGroups));
+        }
+
+        await Promise.all(tasks);
         onToast(`成功添加 ${dedupResult.unique.length} 个账户`, "success");
       }
     },
@@ -61,8 +64,8 @@ export default function HomePage({
    * 手动添加回调：groupId 已在 ManualAddForm 中设为 "default"，直接添加
    */
   const handleManualAdd = useCallback(
-    (newAccounts: OTPAccount[]) => {
-      onAccountsAdded(newAccounts);
+    async (newAccounts: OTPAccount[]) => {
+      await onAccountsAdded(newAccounts);
       const name = newAccounts[0]?.name ?? "未知";
       onToast(`成功添加账户: ${name}`, "success");
     },

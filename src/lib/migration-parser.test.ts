@@ -226,6 +226,23 @@ describe("parseMigrationUrl", () => {
     expect(accounts[1].counter).toBe(10);
   });
 
+  it("当 issuer 缺失且 name 包含服务商前缀时，会从 name 中补齐 issuer", () => {
+    const url = buildMigrationUrl([
+      {
+        secret: new Uint8Array([7, 8, 9]),
+        name: "GitHub:user@example.com",
+        issuer: "",
+        type: 2,
+      },
+    ]);
+
+    const accounts = parseMigrationUrl(url);
+
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].issuer).toBe("GitHub");
+    expect(accounts[0].name).toBe("user@example.com");
+  });
+
   it("HOTP 类型映射正确 (type=1 → hotp)", () => {
     const url = buildMigrationUrl([
       { secret: new Uint8Array([1]), type: 1, counter: 42 },

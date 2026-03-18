@@ -182,7 +182,7 @@ export default function Sidebar({
 
       <div className={`mt-auto ${collapsed ? "flex flex-col items-center gap-2" : "px-3 space-y-2"}`}>
         {!collapsed && (
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2">
             <ThemeToggle />
             <LocaleToggle />
           </div>

@@ -43,6 +43,7 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
         copiedTimerRef.current = null;
       }, 1500);
     } catch {
+      // 剪贴板不可用时静默忽略
     }
   }, []);
 
@@ -68,13 +69,13 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
     : code;
 
   const progress = (remaining / account.period) * 100;
-
   const iconUrl = getServiceIconUrl(account.issuer);
   const fallbackIcon = getFallbackIcon(account.issuer || "?");
 
   return (
     <>
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 transition-shadow hover:shadow-md">
+      {/* 头部：账户信息 */}
       <div className="flex items-start justify-between mb-3">
         {onToggleSelect && (
           <input type="checkbox" checked={!!selected} onChange={() => onToggleSelect(account.id)}
@@ -109,6 +110,7 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
         )}
       </div>
 
+      {/* 验证码区域 */}
       <button type="button" onClick={handleCopyCode} aria-label={`复制验证码 ${code}`}
         className="w-full flex items-center justify-between px-4 py-3 mb-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer group">
         <span className="text-2xl font-mono font-bold tracking-widest text-gray-900 dark:text-gray-100">{formattedCode}</span>
@@ -132,6 +134,7 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
         </div>
       </button>
 
+      {/* 操作按钮 */}
       <div className="flex items-center gap-2 flex-wrap">
         <button type="button" onClick={handleCopySecret} aria-label="复制密钥"
           className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
@@ -149,6 +152,7 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
           {copied === "url" ? <span className="text-green-600 dark:text-green-400">已复制</span> : "URL"}
         </button>
 
+        {/* 详情按钮 */}
         <button type="button" onClick={() => setModalMode("detail")} aria-label="查看详情"
           className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
@@ -157,6 +161,7 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
           详情
         </button>
 
+        {/* 编辑按钮 */}
         {onUpdate && (
           <button type="button" onClick={() => setModalMode("edit")} aria-label="编辑账户"
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors">
@@ -179,6 +184,7 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
       </div>
     </div>
 
+      {/* Modal 弹窗 */}
       {modalMode && (
         <AccountDetailModal
           account={account}

@@ -109,6 +109,27 @@ function mapDigits(digitValue: number): number {
   return 6;
 }
 
+function normalizeIssuerAndName(issuer: string, name: string): Pick<OTPAccount, "issuer" | "name"> {
+  const normalizedIssuer = issuer.trim();
+  const normalizedName = name.trim();
+
+  if (!normalizedName.includes(":")) {
+    return {
+      issuer: normalizedIssuer,
+      name: normalizedName,
+    };
+  }
+
+  const colonIndex = normalizedName.indexOf(":");
+  const labelIssuer = normalizedName.slice(0, colonIndex).trim();
+  const labelName = normalizedName.slice(colonIndex + 1).trim();
+
+  return {
+    issuer: normalizedIssuer || labelIssuer,
+    name: labelName || normalizedName,
+  };
+}
+
 /**
  * 解析 otpauth-migration:// URL，反序列化 protobuf 数据
  * @param migrationUrl - otpauth-migration://offline?data=xxx 格式的 URL
@@ -170,11 +191,12 @@ export function parseMigrationUrl(migrationUrl: string): OTPAccount[] {
       param.secret instanceof Uint8Array
         ? param.secret
         : new Uint8Array(0);
+    const { issuer, name } = normalizeIssuerAndName(param.issuer || "", param.name || "");
 
     return {
       id: crypto.randomUUID(),
-      issuer: param.issuer || "",
-      name: param.name || "",
+      issuer,
+      name,
       secret: bytesToBase32(secretBytes),
       type: mapOtpType(param.type),
       counter: Number(param.counter) || 0,
@@ -219,21 +241,8 @@ export function parseOtpauthUrl(otpauthUrl: string): OTPAccount {
     throw new ParseError("secret 参数不是有效的 base32 编码");
   }
 
-  // 解析路径中的 name，可能包含 issuer 前缀（如 issuer:name）
-  let pathName = decodeURIComponent(url.pathname.replace(/^\//, ""));
-  let issuer = url.searchParams.get("issuer") || "";
-  let name = pathName;
-
-  // 如果 name 包含 ":" 分隔符，提取 issuer 和 name
-  if (pathName.includes(":")) {
-    const colonIndex = pathName.indexOf(":");
-    const pathIssuer = pathName.substring(0, colonIndex).trim();
-    name = pathName.substring(colonIndex + 1).trim();
-    // 如果 URL 参数中没有 issuer，使用路径中的
-    if (!issuer) {
-      issuer = pathIssuer;
-    }
-  }
+  const pathName = decodeURIComponent(url.pathname.replace(/^\//, ""));
+  const { issuer, name } = normalizeIssuerAndName(url.searchParams.get("issuer") || "", pathName);
 
   const counter = parseInt(url.searchParams.get("counter") || "0", 10);
   const digits = parseInt(url.searchParams.get("digits") || "6", 10);

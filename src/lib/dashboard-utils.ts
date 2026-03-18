@@ -27,8 +27,10 @@ export function computeStats(
   };
 }
 
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
 /**
- * 获取最近添加的账户列表，按 createdAt 降序排列
+ * 获取最近添加的账户列表：仅保留 3 天内的数据，按 createdAt 降序排列
  * @param accounts 所有 OTP 账户
  * @param limit 最多返回条数，默认 5
  * @returns 按 createdAt 降序排列的账户列表，最多 limit 条
@@ -37,7 +39,10 @@ export function getRecentAccounts(
   accounts: OTPAccount[],
   limit: number = 5
 ): OTPAccount[] {
+  const cutoff = Date.now() - THREE_DAYS_MS;
+
   return [...accounts]
+    .filter((account) => account.createdAt >= cutoff)
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, limit);
 }

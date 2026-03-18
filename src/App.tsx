@@ -109,6 +109,11 @@ function App() {
     setSelectedAccountIds(new Set());
   }, []);
 
+  const handleGroupsUpdated = useCallback(async (updatedGroups: Group[]) => {
+    setGroups(updatedGroups);
+    await saveGroups(updatedGroups);
+  }, [setGroups]);
+
   const renderPage = () => {
     switch (currentPage) {
       case "home":
@@ -117,7 +122,7 @@ function App() {
             accounts={accounts}
             groups={groups}
             onAccountsAdded={addNewAccounts}
-            onGroupsUpdated={setGroups}
+            onGroupsUpdated={handleGroupsUpdated}
             onDedupDetected={handleDedupDetected}
             onToast={showToast}
           />
