@@ -24,6 +24,21 @@ export default function HomePage({
   onDedupDetected,
   onToast,
 }: HomePageProps) {
+  const assignGroupsByIssuer = useCallback(
+    (incomingAccounts: OTPAccount[]) => {
+      let currentGroups = groups;
+
+      const groupedAccounts = incomingAccounts.map((account) => {
+        const result = findOrCreateGroupByIssuer(currentGroups, account.issuer);
+        currentGroups = result.groups;
+        return { ...account, groupId: result.groupId };
+      });
+
+      return { groupedAccounts, nextGroups: currentGroups };
+    },
+    [groups],
+  );
+
   /**
    * 图片导入回调：
    * 1. 为每个账户按 issuer 自动分组
@@ -32,44 +47,44 @@ export default function HomePage({
    */
   const handleImageDecoded = useCallback(
     async (decoded: OTPAccount[]) => {
-      let currentGroups = groups;
-
-      // 为每个账户按服务商分配 groupId
-      const grouped = decoded.map((account) => {
-        const result = findOrCreateGroupByIssuer(currentGroups, account.issuer);
-        currentGroups = result.groups;
-        return { ...account, groupId: result.groupId };
-      });
+      const { groupedAccounts, nextGroups } = assignGroupsByIssuer(decoded);
 
       // 去重检测
-      const dedupResult = checkDuplicates(accounts, grouped);
+      const dedupResult = checkDuplicates(accounts, groupedAccounts);
 
       if (dedupResult.duplicates.length > 0) {
         // 有重复，交给父组件处理（显示 DedupDialog）
-        onDedupDetected(dedupResult, currentGroups);
+        onDedupDetected(dedupResult, nextGroups);
       } else {
         const tasks = [onAccountsAdded(dedupResult.unique)];
-        if (currentGroups !== groups) {
-          tasks.push(onGroupsUpdated(currentGroups));
+        if (nextGroups !== groups) {
+          tasks.push(onGroupsUpdated(nextGroups));
         }
 
         await Promise.all(tasks);
         onToast(`成功添加 ${dedupResult.unique.length} 个账户`, "success");
       }
     },
-    [accounts, groups, onAccountsAdded, onGroupsUpdated, onDedupDetected, onToast],
+    [accounts, assignGroupsByIssuer, groups, onAccountsAdded, onGroupsUpdated, onDedupDetected, onToast],
   );
 
   /**
-   * 手动添加回调：groupId 已在 ManualAddForm 中设为 "default"，直接添加
+   * 手动添加回调：按 issuer 自动分组，必要时创建新分组
    */
   const handleManualAdd = useCallback(
     async (newAccounts: OTPAccount[]) => {
-      await onAccountsAdded(newAccounts);
-      const name = newAccounts[0]?.name ?? "未知";
+      const { groupedAccounts, nextGroups } = assignGroupsByIssuer(newAccounts);
+      const tasks = [onAccountsAdded(groupedAccounts)];
+
+      if (nextGroups !== groups) {
+        tasks.push(onGroupsUpdated(nextGroups));
+      }
+
+      await Promise.all(tasks);
+      const name = groupedAccounts[0]?.name ?? "未知";
       onToast(`成功添加账户: ${name}`, "success");
     },
-    [onAccountsAdded, onToast],
+    [assignGroupsByIssuer, groups, onAccountsAdded, onGroupsUpdated, onToast],
   );
 
   return (
