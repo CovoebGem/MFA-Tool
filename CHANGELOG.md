@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.3.2 - 2026-03-19
+
+### Changed
+
+- 备份导入改为合并模式，不再直接清空当前账户和分组。
+- 导入时命中相同 `id`、`secret` 或 `name + issuer` 的账户会跳过，不覆盖现有数据。
+- GitHub Actions 的 Linux 构建切换为在 Debian 12 容器内执行，保持 Linux 发版环境更稳定一致。
+
+### Release
+
+- 推荐通过推送 `v0.3.2` 这样的标签触发 GitHub Actions。
+- GitHub Actions 会为 Windows、macOS 和 Linux 构建桌面端安装包。
+
 ## v0.3.1 - 2026-03-19
 
 ### Changed

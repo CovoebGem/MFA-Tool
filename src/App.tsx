@@ -15,6 +15,7 @@ import { useGroups } from "./hooks/useGroups";
 import { skipDuplicates, overrideDuplicates } from "./lib/dedup-checker";
 import { saveGroups } from "./lib/group-manager";
 import { saveAccounts } from "./lib/account-manager";
+import { mergeBackupData } from "./lib/backup";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
@@ -94,10 +95,11 @@ function App() {
   };
 
   const handleImportBackup = async (importedAccounts: OTPAccount[], importedGroups: Group[]) => {
-    setAccounts(importedAccounts);
-    setGroups(importedGroups);
-    await saveAccounts(importedAccounts);
-    await saveGroups(importedGroups);
+    const merged = mergeBackupData(accounts, groups, importedAccounts, importedGroups);
+    setAccounts(merged.accounts);
+    setGroups(merged.groups);
+    await saveAccounts(merged.accounts);
+    await saveGroups(merged.groups);
   };
 
   const handleReorderAccounts = async (reorderedAccounts: OTPAccount[]) => {
