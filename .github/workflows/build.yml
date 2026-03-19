@@ -51,9 +51,6 @@ jobs:
           args: ${{ matrix.args }}
           tagName: ${{ github.ref_name }}
           releaseName: "MFA Tool ${{ github.ref_name }}"
-          releaseBody: |
-            下载对应平台的安装包即可使用。
-            该版本会同步生成应用内更新所需的 latest.json 与签名文件。
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true
@@ -111,9 +108,6 @@ jobs:
           args: ""
           tagName: ${{ github.ref_name }}
           releaseName: "MFA Tool ${{ github.ref_name }}"
-          releaseBody: |
-            下载对应平台的安装包即可使用。
-            该版本会同步生成应用内更新所需的 latest.json 与签名文件。
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true
