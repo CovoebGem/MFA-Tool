@@ -19,6 +19,8 @@ export interface OTPAccount {
   period: number;
   /** 创建时间戳 */
   createdAt: number;
+  /** 最近更新时间戳，用于跨端同步冲突判断 */
+  updatedAt?: number;
   /** 所属分组 ID，默认为 Default_Group 的 ID */
   groupId: string;
   /** 自定义排序顺序，数字越小越靠前 */
@@ -35,6 +37,8 @@ export interface Group {
   isDefault: boolean;
   /** 创建时间戳 */
   createdAt: number;
+  /** 最近更新时间戳，用于跨端同步冲突判断 */
+  updatedAt?: number;
 }
 
 /** 页面路由类型 */

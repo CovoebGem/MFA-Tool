@@ -14,6 +14,18 @@ export function createDefaultGroup(): Group {
     name: "默认",
     isDefault: true,
     createdAt: 0,
+    updatedAt: 0,
+  };
+}
+
+function normalizeUpdatedAt(group: Group): Group {
+  if (group.updatedAt !== undefined) {
+    return group;
+  }
+
+  return {
+    ...group,
+    updatedAt: group.createdAt,
   };
 }
 
@@ -43,11 +55,13 @@ export function createGroup(groups: Group[], name: string): Group[] {
   if (groups.some((g) => g.name === trimmed)) {
     throw new ValidationError("该分组名称已存在", "name");
   }
+  const now = Date.now();
   const newGroup: Group = {
     id: crypto.randomUUID(),
     name: trimmed,
     isDefault: false,
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
   };
   return [...groups, newGroup];
 }
@@ -76,8 +90,9 @@ export function renameGroup(
   if (groups.some((g) => g.id !== groupId && g.name === trimmed)) {
     throw new ValidationError("该分组名称已存在", "name");
   }
+  const now = Date.now();
   return groups.map((g) =>
-    g.id === groupId ? { ...g, name: trimmed } : g,
+    g.id === groupId && g.name !== trimmed ? { ...g, name: trimmed, updatedAt: now } : g,
   );
 }
 
@@ -102,8 +117,9 @@ export function deleteGroup(
     throw new ValidationError("默认分组不可删除", "groupId");
   }
   const defaultGroup = getDefaultGroup(groups);
+  const now = Date.now();
   const updatedAccounts = accounts.map((a) =>
-    a.groupId === groupId ? { ...a, groupId: defaultGroup.id } : a,
+    a.groupId === groupId ? { ...a, groupId: defaultGroup.id, updatedAt: now } : a,
   );
   const updatedGroups = groups.filter((g) => g.id !== groupId);
   return { groups: updatedGroups, accounts: updatedAccounts };
@@ -141,11 +157,13 @@ export function findOrCreateGroupByIssuer(
   if (existing) {
     return { groups, groupId: existing.id };
   }
+  const now = Date.now();
   const newGroup: Group = {
     id: crypto.randomUUID(),
     name: trimmed,
     isDefault: false,
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
   };
   return { groups: [...groups, newGroup], groupId: newGroup.id };
 }
@@ -157,7 +175,7 @@ export function findOrCreateGroupByIssuer(
 export async function loadGroups(): Promise<Group[]> {
   try {
     const json = await invoke<string>("read_groups");
-    const groups = JSON.parse(json) as Group[];
+    const groups = (JSON.parse(json) as Group[]).map(normalizeUpdatedAt);
     if (groups.length === 0) {
       return [createDefaultGroup()];
     }

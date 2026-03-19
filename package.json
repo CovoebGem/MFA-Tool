@@ -1,7 +1,7 @@
 {
   "name": "mfa-tool",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Desktop TOTP authenticator built with Tauri and React",
   "license": "MIT",
   "repository": {

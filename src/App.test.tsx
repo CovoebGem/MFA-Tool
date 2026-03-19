@@ -132,6 +132,10 @@ vi.mock("./components/BackupPanel", () => ({
   ),
 }));
 
+vi.mock("./components/WebDavSyncPanel", () => ({
+  default: () => null,
+}));
+
 describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
