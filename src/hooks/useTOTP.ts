@@ -1,5 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { generateTOTP, getRemainingSeconds } from "../lib/totp-generator";
+import {
+  generateTOTP,
+  getCurrentTimeStep,
+  getRemainingSeconds,
+} from "../lib/totp-generator";
+
+function getMillisecondsUntilNextSecond(timestamp: number = Date.now()): number {
+  const remainder = timestamp % 1000;
+  return remainder === 0 ? 1000 : 1000 - remainder;
+}
 
 /**
  * 管理 TOTP 验证码生成和倒计时状态
@@ -13,51 +22,73 @@ export function useTOTP(
   period: number = 30,
   digits: number = 6,
 ): { code: string; remaining: number } {
+  const initialTimestamp = Date.now();
   const [code, setCode] = useState(() =>
-    secret ? generateTOTP(secret, period, digits) : "",
+    secret ? generateTOTP(secret, period, digits, initialTimestamp) : "",
   );
-  const [remaining, setRemaining] = useState(() => getRemainingSeconds(period));
+  const [remaining, setRemaining] = useState(() =>
+    getRemainingSeconds(period, initialTimestamp),
+  );
+  const timeStepRef = useRef<number | null>(
+    secret ? getCurrentTimeStep(period, initialTimestamp) : null,
+  );
 
-  const secretRef = useRef(secret);
-  const periodRef = useRef(period);
-  const digitsRef = useRef(digits);
-
-  // secret/period/digits 变化时立即重新生成
   useEffect(() => {
-    secretRef.current = secret;
-    periodRef.current = period;
-    digitsRef.current = digits;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    if (secret) {
-      setCode(generateTOTP(secret, period, digits));
-    } else {
-      setCode("");
-    }
-    setRemaining(getRemainingSeconds(period));
-  }, [secret, period, digits]);
-
-  // 每秒更新倒计时，窗口到期时重新生成验证码
-  useEffect(() => {
-    if (!secret) return;
-
-    const intervalId = setInterval(() => {
-      const newRemaining = getRemainingSeconds(periodRef.current);
-      setRemaining(newRemaining);
-
-      // 当 remaining 等于 period 时，说明进入了新的时间窗口
-      if (newRemaining === periodRef.current) {
-        setCode(
-          generateTOTP(
-            secretRef.current,
-            periodRef.current,
-            digitsRef.current,
-          ),
-        );
+    const clearScheduledSync = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
-    }, 1000);
+    };
 
-    return () => clearInterval(intervalId);
-  }, [secret]);
+    const sync = (timestamp: number = Date.now()) => {
+      setRemaining(getRemainingSeconds(period, timestamp));
+
+      if (!secret) {
+        timeStepRef.current = null;
+        setCode("");
+        return;
+      }
+
+      const nextStep = getCurrentTimeStep(period, timestamp);
+      if (timeStepRef.current !== nextStep) {
+        timeStepRef.current = nextStep;
+        setCode(generateTOTP(secret, period, digits, timestamp));
+      }
+    };
+
+    const scheduleNextSync = () => {
+      clearScheduledSync();
+      timeoutId = setTimeout(() => {
+        sync(Date.now());
+        scheduleNextSync();
+      }, getMillisecondsUntilNextSecond());
+    };
+
+    const resyncAndSchedule = () => {
+      if (document.visibilityState === "hidden") {
+        clearScheduledSync();
+        return;
+      }
+
+      sync(Date.now());
+      scheduleNextSync();
+    };
+
+    timeStepRef.current = null;
+    resyncAndSchedule();
+
+    window.addEventListener("focus", resyncAndSchedule);
+    document.addEventListener("visibilitychange", resyncAndSchedule);
+
+    return () => {
+      clearScheduledSync();
+      window.removeEventListener("focus", resyncAndSchedule);
+      document.removeEventListener("visibilitychange", resyncAndSchedule);
+    };
+  }, [secret, period, digits]);
 
   return { code, remaining };
 }

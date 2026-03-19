@@ -167,7 +167,7 @@
   自动排序用 `src/lib/sorter.ts` + `SortConfig`。
   自定义排序依赖 `OTPAccount.order`，拖拽后会重写 `order` 并更新账户 `updatedAt` 后持久化。
 - 验证码生成
-  `useTOTP` 每秒刷新倒计时，到时间窗口切换时重新生成验证码。
+  `useTOTP` 会按整秒边界对齐刷新倒计时，并在窗口切换、窗口重新聚焦或页面从后台恢复可见时立即重新同步验证码，避免错过边界后停留旧码。
   底层实现是 `src/lib/totp-generator.ts`，基于 `otpauth` 库。
 - 应用内更新
   `useAppUpdater` 在桌面端启动时自动检查 GitHub Releases，并每小时轮询一次最新版本。
