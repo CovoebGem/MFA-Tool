@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use keyring::Entry;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::StatusCode;
@@ -154,6 +154,14 @@ fn write_groups(app: tauri::AppHandle, data: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn read_current_timestamp_ms() -> Result<u64, String> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn has_webdav_password() -> Result<bool, String> {
     Ok(read_saved_webdav_password()?.is_some())
 }
@@ -253,6 +261,7 @@ pub fn run() {
             write_accounts,
             read_groups,
             write_groups,
+            read_current_timestamp_ms,
             has_webdav_password,
             save_webdav_password,
             clear_webdav_password,

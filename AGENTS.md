@@ -146,7 +146,7 @@
 - 手动添加
   `ManualAddForm` 支持 base32 手输和 `otpauth://` URL 两种模式。
   base32 校验在 `validators.ts`，URL 解析走 `parseOtpauthUrl()`。
-  当前首页没有把 `groups` 传给 `ManualAddForm`，所以手动添加默认进 `default` 分组。
+  当前首页没有把 `groups` 传给 `ManualAddForm`，所以手动添加界面不显示分组选择器；提交后由 `HomePage` 按 `issuer` 自动创建或归入分组，空 `issuer` 仍落到 `default` 分组。
 - Google Authenticator migration 导入
   `migration-parser.ts` 内联了 protobuf 描述，不依赖运行时读取 `.proto` 文件。
   导入结果统一转换成 `OTPAccount[]`，默认算法只落到 `SHA1`。
@@ -167,7 +167,7 @@
   自动排序用 `src/lib/sorter.ts` + `SortConfig`。
   自定义排序依赖 `OTPAccount.order`，拖拽后会重写 `order` 并更新账户 `updatedAt` 后持久化。
 - 验证码生成
-  `useTOTP` 会按整秒边界对齐刷新倒计时，并在窗口切换、窗口重新聚焦或页面从后台恢复可见时立即重新同步验证码，避免错过边界后停留旧码。
+  `useTOTP` 会按整秒边界对齐刷新倒计时，并在窗口切换、窗口重新聚焦或页面从后台恢复可见时立即重新同步验证码，避免错过边界后停留旧码；桌面端会优先使用 Tauri 宿主系统时间校准运行时时钟，而不是单纯依赖前端 `Date.now()`。
   底层实现是 `src/lib/totp-generator.ts`，基于 `otpauth` 库。
 - 应用内更新
   `useAppUpdater` 在桌面端启动时自动检查 GitHub Releases，并每小时轮询一次最新版本。

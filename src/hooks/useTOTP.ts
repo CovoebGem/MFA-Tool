@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   generateTOTP,
   getCurrentTimeStep,
   getRemainingSeconds,
 } from "../lib/totp-generator";
+import { getRuntimeNowMs, syncRuntimeClock } from "../lib/runtime-clock";
 
-function getMillisecondsUntilNextSecond(timestamp: number = Date.now()): number {
+const CLOCK_RECALIBRATE_INTERVAL_MS = 60_000;
+
+function getMillisecondsUntilNextSecond(timestamp: number = getRuntimeNowMs()): number {
   const remainder = timestamp % 1000;
   return remainder === 0 ? 1000 : 1000 - remainder;
 }
@@ -22,7 +27,7 @@ export function useTOTP(
   period: number = 30,
   digits: number = 6,
 ): { code: string; remaining: number } {
-  const initialTimestamp = Date.now();
+  const initialTimestamp = getRuntimeNowMs();
   const [code, setCode] = useState(() =>
     secret ? generateTOTP(secret, period, digits, initialTimestamp) : "",
   );
@@ -35,6 +40,9 @@ export function useTOTP(
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let recalibrateIntervalId: ReturnType<typeof setInterval> | null = null;
+    let unlistenWindowFocus: (() => void) | null = null;
+    let disposed = false;
 
     const clearScheduledSync = () => {
       if (timeoutId !== null) {
@@ -43,7 +51,7 @@ export function useTOTP(
       }
     };
 
-    const sync = (timestamp: number = Date.now()) => {
+    const sync = (timestamp: number = getRuntimeNowMs()) => {
       setRemaining(getRemainingSeconds(period, timestamp));
 
       if (!secret) {
@@ -62,31 +70,78 @@ export function useTOTP(
     const scheduleNextSync = () => {
       clearScheduledSync();
       timeoutId = setTimeout(() => {
-        sync(Date.now());
+        sync(getRuntimeNowMs());
         scheduleNextSync();
-      }, getMillisecondsUntilNextSecond());
+      }, getMillisecondsUntilNextSecond(getRuntimeNowMs()));
     };
 
-    const resyncAndSchedule = () => {
+    const resyncAndSchedule = async () => {
       if (document.visibilityState === "hidden") {
         clearScheduledSync();
         return;
       }
 
-      sync(Date.now());
+      await syncRuntimeClock();
+      if (disposed) {
+        return;
+      }
+
+      sync(getRuntimeNowMs());
       scheduleNextSync();
     };
 
     timeStepRef.current = null;
-    resyncAndSchedule();
+    void resyncAndSchedule();
 
-    window.addEventListener("focus", resyncAndSchedule);
-    document.addEventListener("visibilitychange", resyncAndSchedule);
+    const handleWindowFocus = () => {
+      void resyncAndSchedule();
+    };
+
+    const handleVisibilityChange = () => {
+      void resyncAndSchedule();
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    recalibrateIntervalId = setInterval(() => {
+      void resyncAndSchedule();
+    }, CLOCK_RECALIBRATE_INTERVAL_MS);
+
+    if (isTauri()) {
+      void getCurrentWindow()
+        .onFocusChanged(({ payload: focused }) => {
+          if (focused) {
+            void resyncAndSchedule();
+            return;
+          }
+
+          clearScheduledSync();
+        })
+        .then((unlisten) => {
+          if (disposed) {
+            unlisten();
+            return;
+          }
+
+          unlistenWindowFocus = unlisten;
+        })
+        .catch(() => {
+          // ignore desktop focus listener setup failures and rely on DOM events
+        });
+    }
 
     return () => {
+      disposed = true;
       clearScheduledSync();
-      window.removeEventListener("focus", resyncAndSchedule);
-      document.removeEventListener("visibilitychange", resyncAndSchedule);
+      if (recalibrateIntervalId !== null) {
+        clearInterval(recalibrateIntervalId);
+      }
+      if (unlistenWindowFocus) {
+        unlistenWindowFocus();
+      }
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [secret, period, digits]);
 
