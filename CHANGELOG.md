@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.3.1 - 2026-03-19
+
+### Changed
+
+- 应用图标文字从 `2FA` 调整为 `MFA`，并重做母版源文件，去掉旧图标残留的白色方角感。
+- 重新生成 macOS、Windows、Linux、iOS、Android 全套图标资源。
+- 清理仓库根目录下旧图标临时文件，避免后续误用过期素材。
+
+### Release
+
+- 推荐通过推送 `v0.3.1` 这样的标签触发 GitHub Actions。
+- GitHub Actions 会为 Windows、macOS 和 Linux 构建桌面端安装包。
+
 ## v0.3.0 - 2026-03-19
 
 ### Changed
