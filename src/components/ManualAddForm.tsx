@@ -60,6 +60,7 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
       return;
     }
 
+    const now = Date.now();
     const account: OTPAccount = {
       id: crypto.randomUUID(),
       issuer: issuer.trim(),
@@ -70,7 +71,8 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
       digits: 6,
       period: 30,
       counter: 0,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
       groupId: selectedGroupId,
     };
 
@@ -99,6 +101,7 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
     try {
       const account = parseOtpauthUrl(trimmedUrl);
       account.groupId = selectedGroupId;
+      account.updatedAt = account.updatedAt ?? account.createdAt;
       onAccountAdded([account]);
       clearForm();
     } catch (err) {

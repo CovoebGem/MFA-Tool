@@ -10,6 +10,7 @@ import DedupDialog from "./components/DedupDialog";
 import Toast from "./components/Toast";
 import BackupPanel from "./components/BackupPanel";
 import AppUpdateManager from "./components/AppUpdateManager";
+import WebDavSyncPanel from "./components/WebDavSyncPanel";
 import { useAccounts } from "./hooks/useAccounts";
 import { useGroups } from "./hooks/useGroups";
 import { useViewportHeight } from "./hooks/useViewportHeight";
@@ -96,17 +97,26 @@ function App() {
     await addNewAccounts([account]);
   };
 
+  const persistAccountsAndGroups = useCallback(async (nextAccounts: OTPAccount[], nextGroups: Group[]) => {
+    setAccounts(nextAccounts);
+    setGroups(nextGroups);
+    await saveAccounts(nextAccounts);
+    await saveGroups(nextGroups);
+  }, [setAccounts, setGroups]);
+
   const handleImportBackup = async (importedAccounts: OTPAccount[], importedGroups: Group[]) => {
     const merged = mergeBackupData(accounts, groups, importedAccounts, importedGroups);
-    setAccounts(merged.accounts);
-    setGroups(merged.groups);
-    await saveAccounts(merged.accounts);
-    await saveGroups(merged.groups);
+    await persistAccountsAndGroups(merged.accounts, merged.groups);
   };
 
   const handleReorderAccounts = async (reorderedAccounts: OTPAccount[]) => {
-    setAccounts(reorderedAccounts);
-    await saveAccounts(reorderedAccounts);
+    const now = Date.now();
+    const syncedAccounts = reorderedAccounts.map((account) => ({
+      ...account,
+      updatedAt: now,
+    }));
+    setAccounts(syncedAccounts);
+    await saveAccounts(syncedAccounts);
   };
 
   const handleNavigate = useCallback((page: Page) => {
@@ -185,6 +195,12 @@ function App() {
           </h1>
           <div className="flex items-center gap-2">
             <AppUpdateManager onToast={showToast} />
+            <WebDavSyncPanel
+              accounts={accounts}
+              groups={groups}
+              onApplyData={persistAccountsAndGroups}
+              onToast={showToast}
+            />
             <BackupPanel
               accounts={accounts}
               groups={groups}

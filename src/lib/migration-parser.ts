@@ -187,6 +187,7 @@ export function parseMigrationUrl(migrationUrl: string): OTPAccount[] {
   const otpParams = payloadObj.otpParameters || [];
 
   return otpParams.map((param) => {
+    const now = Date.now();
     const secretBytes =
       param.secret instanceof Uint8Array
         ? param.secret
@@ -203,7 +204,8 @@ export function parseMigrationUrl(migrationUrl: string): OTPAccount[] {
       algorithm: "SHA1" as const,
       digits: mapDigits(param.digits),
       period: 30,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
       groupId: "default",
     };
   });
@@ -247,6 +249,7 @@ export function parseOtpauthUrl(otpauthUrl: string): OTPAccount {
   const counter = parseInt(url.searchParams.get("counter") || "0", 10);
   const digits = parseInt(url.searchParams.get("digits") || "6", 10);
   const period = parseInt(url.searchParams.get("period") || "30", 10);
+  const now = Date.now();
 
   return {
     id: crypto.randomUUID(),
@@ -258,7 +261,8 @@ export function parseOtpauthUrl(otpauthUrl: string): OTPAccount {
     algorithm: "SHA1",
     digits: isNaN(digits) ? 6 : digits,
     period: isNaN(period) ? 30 : period,
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
     groupId: "default",
   };
 }

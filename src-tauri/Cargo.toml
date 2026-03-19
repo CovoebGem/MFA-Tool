@@ -1,6 +1,6 @@
 [package]
 name = "mfa-tool"
-version = "0.3.2"
+version = "0.3.3"
 description = "MFA Tool desktop authenticator built with Tauri"
 authors = ["CovoebGem"]
 license = "MIT"
@@ -25,3 +25,5 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-updater = "2.10.0"
 tauri-plugin-process = "2.3.1"
+keyring = "3"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
