@@ -15,6 +15,19 @@ vi.mock("../LocaleToggle", () => ({
 }));
 
 describe("Sidebar", () => {
+  it("renders cloud sync as a sidebar navigation item", () => {
+    render(
+      <Sidebar
+        currentPage="sync"
+        onNavigate={vi.fn()}
+        collapsed={false}
+        onToggleCollapse={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /nav\.sync/ })).toBeInTheDocument();
+  });
+
   it("stacks footer controls vertically when expanded to avoid overflow", () => {
     render(
       <Sidebar

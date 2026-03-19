@@ -42,7 +42,7 @@ export interface Group {
 }
 
 /** 页面路由类型 */
-export type Page = "home" | "accounts" | "groups" | "temp";
+export type Page = "home" | "accounts" | "groups" | "temp" | "sync";
 
 /** 排序字段 */
 export type SortField = "name" | "issuer" | "createdAt";

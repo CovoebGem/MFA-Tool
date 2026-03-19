@@ -1,6 +1,6 @@
 [package]
 name = "mfa-tool"
-version = "0.3.3"
+version = "0.3.4"
 description = "MFA Tool desktop authenticator built with Tauri"
 authors = ["CovoebGem"]
 license = "MIT"
