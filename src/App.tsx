@@ -12,6 +12,7 @@ import BackupPanel from "./components/BackupPanel";
 import AppUpdateManager from "./components/AppUpdateManager";
 import { useAccounts } from "./hooks/useAccounts";
 import { useGroups } from "./hooks/useGroups";
+import { useViewportHeight } from "./hooks/useViewportHeight";
 import { skipDuplicates, overrideDuplicates } from "./lib/dedup-checker";
 import { saveGroups } from "./lib/group-manager";
 import { saveAccounts } from "./lib/account-manager";
@@ -27,6 +28,7 @@ function App() {
   const [tempEntries, setTempEntries] = useState<TempEntry[]>([]);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
+  const viewportHeight = useViewportHeight();
 
   const showToast = useCallback((message: string, type: "success" | "error") => setToast({ message, type }), []);
 
@@ -162,14 +164,18 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="bg-gray-100 dark:bg-gray-900" style={{ minHeight: viewportHeight }}>
       <Sidebar
         currentPage={currentPage}
         onNavigate={handleNavigate}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        viewportHeight={viewportHeight}
       />
-      <main className={`${sidebarCollapsed ? "ml-16" : "ml-48"} min-h-screen transition-all duration-200`}>
+      <main
+        className={`${sidebarCollapsed ? "ml-16" : "ml-48"} transition-all duration-200`}
+        style={{ minHeight: viewportHeight }}
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
           <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
             {currentPage === "home" && "首页"}

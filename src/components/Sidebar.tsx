@@ -9,6 +9,7 @@ interface SidebarProps {
   onNavigate: (page: Page) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  viewportHeight?: string;
 }
 
 function HomeIcon({ className }: { className?: string }) {
@@ -136,6 +137,7 @@ export default function Sidebar({
   onNavigate,
   collapsed,
   onToggleCollapse,
+  viewportHeight = "100vh",
 }: SidebarProps) {
   const { t } = useI18n();
 
@@ -148,9 +150,10 @@ export default function Sidebar({
 
   return (
     <nav
-      className={`fixed left-0 top-0 flex h-screen flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 transition-all duration-200 ${
+      className={`fixed left-0 top-0 flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 transition-all duration-200 ${
         collapsed ? "w-16 items-center" : "w-48"
       }`}
+      style={{ height: viewportHeight }}
       aria-label="主导航"
     >
       <div className={`flex flex-1 flex-col ${collapsed ? "items-center" : "px-3"}`}>
