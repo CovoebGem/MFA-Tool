@@ -9,8 +9,11 @@ import {
   writeWebDavSync,
 } from "../lib/webdav-client";
 import {
+  DEFAULT_WEBDAV_CONFIG,
+  buildWebDavFileUrl,
   clearWebDavConfig,
   loadWebDavConfig,
+  normalizeWebDavPath,
   saveWebDavConfig,
   type WebDavConfig,
 } from "../lib/webdav-store";
@@ -18,12 +21,14 @@ import { mergeWebDavSyncData } from "../lib/webdav-sync";
 
 type BusyAction =
   | "testing"
+  | "saving"
   | "pulling"
   | "pushing"
   | "syncing"
-  | "saving-password"
   | "clearing-password"
   | null;
+
+type ConnectionState = "idle" | "connected" | "failed";
 
 interface WebDavSyncPanelProps {
   accounts: OTPAccount[];
@@ -32,43 +37,95 @@ interface WebDavSyncPanelProps {
   onToast: (message: string, type: "success" | "error") => void;
 }
 
-function CloudIcon({ className }: { className?: string }) {
+function CheckIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75A4.5 4.5 0 016.75 11.25h.258a6 6 0 1111.728 1.5A3.75 3.75 0 0118.75 20.25H6.75a4.5 4.5 0 01-4.5-4.5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+    </svg>
+  );
+}
+
+function ArrowDownTrayIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+  );
+}
+
+function ArrowUpTrayIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+    </svg>
+  );
+}
+
+function ArrowsRightLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5h13.5m0 0-3-3m3 3-3 3m-12 6H19.5m0 0-3-3m3 3-3 3" />
     </svg>
   );
 }
 
 function validateConfig(draft: WebDavConfig): WebDavConfig {
-  const fileUrl = draft.fileUrl.trim();
+  const baseUrl = draft.baseUrl.trim();
   const username = draft.username.trim();
+  const path = normalizeWebDavPath(draft.path);
 
-  if (!fileUrl) {
-    throw new Error("请填写 WebDAV 文件 URL");
+  if (!baseUrl) {
+    throw new Error("请填写 WebDAV 地址");
   }
   if (!username) {
-    throw new Error("请填写 WebDAV 用户名");
+    throw new Error("请填写用户名");
   }
 
   let parsed: URL;
   try {
-    parsed = new URL(fileUrl);
+    parsed = new URL(baseUrl);
   } catch {
-    throw new Error("WebDAV 文件 URL 格式无效");
+    throw new Error("WebDAV 地址格式无效");
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("WebDAV 文件 URL 仅支持 http/https");
+    throw new Error("WebDAV 地址仅支持 http/https");
   }
   if (parsed.username || parsed.password) {
-    throw new Error("请不要把用户名或密码直接写进 URL");
+    throw new Error("请不要把用户名或密码直接写进地址");
   }
-  if (parsed.pathname.endsWith("/")) {
-    throw new Error("请输入具体的远端 sync.json 文件地址");
+  if (parsed.search || parsed.hash) {
+    throw new Error("WebDAV 地址中不要包含查询参数或锚点");
   }
 
-  return { fileUrl, username };
+  const normalizedBaseUrl = `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
+
+  return {
+    baseUrl: normalizedBaseUrl || parsed.origin,
+    path,
+    username,
+  };
+}
+
+function getStatusMeta(state: ConnectionState, hasConfig: boolean) {
+  if (state === "connected") {
+    return {
+      label: "已连接",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+    };
+  }
+
+  if (state === "failed") {
+    return {
+      label: "连接失败",
+      className: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
+    };
+  }
+
+  return {
+    label: hasConfig ? "未测试" : "未连接",
+    className: "border-gray-200 bg-white text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300",
+  };
 }
 
 export default function WebDavSyncPanel({
@@ -77,12 +134,11 @@ export default function WebDavSyncPanel({
   onApplyData,
   onToast,
 }: WebDavSyncPanelProps) {
-  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<WebDavConfig>(() => loadWebDavConfig());
   const [password, setPassword] = useState("");
-  const [rememberPassword, setRememberPassword] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -106,56 +162,51 @@ export default function WebDavSyncPanel({
   }, []);
 
   const hasConfig = useMemo(
-    () => draft.fileUrl.trim().length > 0 && draft.username.trim().length > 0,
-    [draft.fileUrl, draft.username],
+    () => draft.baseUrl.trim().length > 0 && draft.username.trim().length > 0,
+    [draft.baseUrl, draft.username],
   );
+
+  const resolvedFileUrl = useMemo(() => {
+    try {
+      return buildWebDavFileUrl(validateConfig(draft));
+    } catch {
+      return null;
+    }
+  }, [draft]);
+
   const usingInsecureHttp = useMemo(
-    () => draft.fileUrl.trim().startsWith("http://"),
-    [draft.fileUrl],
+    () => draft.baseUrl.trim().startsWith("http://"),
+    [draft.baseUrl],
   );
 
-  const resetSensitiveInput = () => {
-    setPassword("");
-    setRememberPassword(false);
+  const statusMeta = getStatusMeta(connectionState, hasConfig);
+
+  const updateDraft = (updater: (prev: WebDavConfig) => WebDavConfig) => {
+    setConnectionState("idle");
+    setDraft(updater);
   };
 
-  const closeDialog = () => {
-    saveWebDavConfig(draft);
-    setOpen(false);
-    resetSensitiveInput();
-  };
-
-  const persistDraft = async () => {
-    const normalized = validateConfig(draft);
-    saveWebDavConfig(normalized);
-    setDraft(normalized);
-
-    const enteredPassword = password;
-    if (!enteredPassword && !passwordSaved) {
-      throw new Error("请输入密码，或先保存到系统钥匙串");
-    }
-
-    if (rememberPassword && enteredPassword) {
-      await saveWebDavPassword(enteredPassword);
-      setPasswordSaved(true);
-    }
-
+  const prepareSyncRequest = () => {
+    const config = validateConfig(draft);
     return {
-      ...normalized,
-      password: enteredPassword || null,
+      ...config,
+      fileUrl: buildWebDavFileUrl(config),
+      password: password || null,
     };
   };
 
-  const runAction = async (
-    action: Exclude<BusyAction, "saving-password" | "clearing-password" | null>,
+  const runSyncAction = async (
+    action: Exclude<BusyAction, "saving" | "clearing-password" | null>,
     handler: (request: { fileUrl: string; username: string; password: string | null }) => Promise<void>,
   ) => {
     setBusyAction(action);
+
     try {
-      const request = await persistDraft();
+      const request = prepareSyncRequest();
       await handler(request);
-      resetSensitiveInput();
+      setConnectionState("connected");
     } catch (err) {
+      setConnectionState("failed");
       const message = err instanceof Error ? err.message : "WebDAV 同步失败";
       onToast(message, "error");
     } finally {
@@ -163,37 +214,24 @@ export default function WebDavSyncPanel({
     }
   };
 
-  const handleSavePassword = async () => {
-    if (!password) {
-      onToast("请输入要保存到系统钥匙串的密码", "error");
-      return;
-    }
+  const handleSaveConfig = async () => {
+    setBusyAction("saving");
 
-    setBusyAction("saving-password");
     try {
-      await saveWebDavPassword(password);
-      setPasswordSaved(true);
-      setPassword("");
-      setRememberPassword(false);
-      onToast("WebDAV 密码已保存到系统钥匙串", "success");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "保存密码失败";
-      onToast(message, "error");
-    } finally {
-      setBusyAction(null);
-    }
-  };
+      const config = validateConfig(draft);
+      saveWebDavConfig(config);
+      setDraft(config);
 
-  const handleClearPassword = async () => {
-    setBusyAction("clearing-password");
-    try {
-      await clearSavedWebDavPassword();
-      setPasswordSaved(false);
-      setPassword("");
-      setRememberPassword(false);
-      onToast("已清除系统钥匙串中的 WebDAV 密码", "success");
+      if (password) {
+        await saveWebDavPassword(password);
+        setPasswordSaved(true);
+        setPassword("");
+        onToast("WebDAV 配置和密码已保存", "success");
+      } else {
+        onToast("WebDAV 配置已保存", "success");
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "清除密码失败";
+      const message = err instanceof Error ? err.message : "保存配置失败";
       onToast(message, "error");
     } finally {
       setBusyAction(null);
@@ -201,43 +239,41 @@ export default function WebDavSyncPanel({
   };
 
   const handleTestConnection = async () => {
-    await runAction("testing", async ({ fileUrl, username, password }) => {
-      const remoteJson = await readWebDavSync(fileUrl, username, password);
+    await runSyncAction("testing", async ({ fileUrl, username, password: nextPassword }) => {
+      const remoteJson = await readWebDavSync(fileUrl, username, nextPassword);
       onToast(
-        remoteJson
-          ? "连接成功，已读取云端同步文件"
-          : "连接成功，云端同步文件尚未创建",
+        remoteJson ? "连接成功，云端同步文件可读" : "连接成功，云端同步文件尚未创建",
         "success",
       );
     });
   };
 
   const handlePullAndMerge = async () => {
-    await runAction("pulling", async ({ fileUrl, username, password }) => {
-      const remoteJson = await readWebDavSync(fileUrl, username, password);
+    await runSyncAction("pulling", async ({ fileUrl, username, password: nextPassword }) => {
+      const remoteJson = await readWebDavSync(fileUrl, username, nextPassword);
       if (!remoteJson) {
-        throw new Error("云端同步文件不存在，无法拉取");
+        throw new Error("云端还没有同步文件，暂时无法拉取");
       }
 
       const remoteData = parseBackupJSON(remoteJson);
       const merged = mergeWebDavSyncData(accounts, groups, remoteData.accounts, remoteData.groups);
       await onApplyData(merged.accounts, merged.groups);
-      onToast("已从 WebDAV 拉取并合并云端数据", "success");
+      onToast("已从云端拉取并合并数据", "success");
     });
   };
 
   const handlePushToCloud = async () => {
-    await runAction("pushing", async ({ fileUrl, username, password }) => {
+    await runSyncAction("pushing", async ({ fileUrl, username, password: nextPassword }) => {
       const json = await exportToJSON(accounts, groups);
-      await writeWebDavSync(fileUrl, username, json, password);
-      onToast("已将当前本地数据上传到 WebDAV", "success");
+      await writeWebDavSync(fileUrl, username, json, nextPassword);
+      onToast("已把当前本地数据上传到云端", "success");
     });
   };
 
   const handleSyncNow = async () => {
-    await runAction("syncing", async ({ fileUrl, username, password }) => {
-      const remoteJson = await readWebDavSync(fileUrl, username, password);
-      const nextData = remoteJson
+    await runSyncAction("syncing", async ({ fileUrl, username, password: nextPassword }) => {
+      const remoteJson = await readWebDavSync(fileUrl, username, nextPassword);
+      const merged = remoteJson
         ? (() => {
             const remoteData = parseBackupJSON(remoteJson);
             return mergeWebDavSyncData(accounts, groups, remoteData.accounts, remoteData.groups);
@@ -245,223 +281,229 @@ export default function WebDavSyncPanel({
         : { accounts, groups };
 
       if (remoteJson) {
-        await onApplyData(nextData.accounts, nextData.groups);
+        await onApplyData(merged.accounts, merged.groups);
       }
 
-      const uploadJson = await exportToJSON(nextData.accounts, nextData.groups);
-      await writeWebDavSync(fileUrl, username, uploadJson, password);
-      onToast(
-        remoteJson
-          ? "已完成 WebDAV 合并同步"
-          : "已创建首个 WebDAV 云端同步文件",
-        "success",
-      );
+      const uploadJson = await exportToJSON(merged.accounts, merged.groups);
+      await writeWebDavSync(fileUrl, username, uploadJson, nextPassword);
+      onToast(remoteJson ? "已完成一次双向同步" : "已创建首个云端同步文件", "success");
     });
+  };
+
+  const handleClearSavedPassword = async () => {
+    setBusyAction("clearing-password");
+
+    try {
+      await clearSavedWebDavPassword();
+      setPasswordSaved(false);
+      setPassword("");
+      onToast("已清除系统钥匙串中的 WebDAV 密码", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "清除已保存密码失败";
+      onToast(message, "error");
+    } finally {
+      setBusyAction(null);
+    }
   };
 
   const handleClearConfig = () => {
     clearWebDavConfig();
-    setDraft({ fileUrl: "", username: "" });
+    setDraft(DEFAULT_WEBDAV_CONFIG);
+    setPassword("");
+    setConnectionState("idle");
     onToast("已清空本地 WebDAV 配置", "success");
   };
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-      >
-        <CloudIcon className="w-4 h-4" />
-        云同步
-      </button>
-
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="WebDAV 云同步"
-        >
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
-            <div className="border-b border-gray-200 bg-gradient-to-r from-sky-50 via-white to-white px-6 py-5 dark:border-gray-700 dark:from-sky-950/30 dark:via-gray-800 dark:to-gray-800">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-600 dark:text-sky-300">
-                    WebDAV Sync
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    WebDAV 云同步
-                  </h2>
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                    当前版本使用单文件 `sync.json` 进行合并同步。删除操作暂不会跨端传播。
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeDialog}
-                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                  aria-label="关闭"
-                >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-5 px-6 py-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label htmlFor="webdav-file-url" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                    WebDAV 文件 URL
-                  </label>
-                  <input
-                    id="webdav-file-url"
-                    type="url"
-                    value={draft.fileUrl}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, fileUrl: event.target.value }))}
-                    placeholder="https://dav.example.com/remote.php/dav/files/you/MFA-Tool/sync.json"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="webdav-username" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                    用户名
-                  </label>
-                  <input
-                    id="webdav-username"
-                    type="text"
-                    value={draft.username}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, username: event.target.value }))}
-                    placeholder="your-webdav-user"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="webdav-password" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">
-                    密码
-                  </label>
-                  <input
-                    id="webdav-password"
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder={passwordSaved ? "留空则使用系统钥匙串中的已保存密码" : "本次操作使用的密码"}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-300">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-gray-900 dark:text-gray-100">密码状态</span>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${passwordSaved ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"}`}>
-                    {passwordSaved ? "已保存到系统钥匙串" : "未保存密码"}
-                  </span>
-                </div>
-
-                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={rememberPassword}
-                    onChange={(event) => setRememberPassword(event.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-                  />
-                  当前输入的密码同步时一起保存到系统钥匙串
-                </label>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSavePassword}
-                    disabled={busyAction !== null}
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                  >
-                    保存密码
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearPassword}
-                    disabled={busyAction !== null || !passwordSaved}
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                  >
-                    清除已保存密码
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearConfig}
-                    disabled={busyAction !== null}
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                  >
-                    清空配置
-                  </button>
-                </div>
-              </div>
-
-              {usingInsecureHttp && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-                  当前使用的是 HTTP 明文传输。同步的是 2FA 密钥，强烈建议改用 HTTPS 的 WebDAV 地址。
-                </div>
+    <div className="space-y-6 px-4 py-5 md:px-6">
+      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex flex-col gap-4 border-b border-gray-200 pb-5 dark:border-gray-700 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">WebDAV 配置</h2>
+              <span className={`rounded-full border px-3 py-1 text-sm font-medium ${statusMeta.className}`}>
+                {statusMeta.label}
+              </span>
+              {passwordSaved && (
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                  已保存密码
+                </span>
               )}
-
-              <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-300">
-                <p className="font-medium text-gray-900 dark:text-gray-100">建议用法</p>
-                <p className="mt-2">
-                  让 WebDAV URL 指向一个具体 JSON 文件，例如 `.../MFA-Tool/sync.json`。首次同步会自动创建文件。
-                </p>
-              </div>
             </div>
-
-            <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-900/40">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleTestConnection}
-                  disabled={busyAction !== null || !hasConfig}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  {busyAction === "testing" ? "测试中..." : "测试连接"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePullAndMerge}
-                  disabled={busyAction !== null || !hasConfig}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  {busyAction === "pulling" ? "拉取中..." : "拉取并合并"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePushToCloud}
-                  disabled={busyAction !== null || !hasConfig}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  {busyAction === "pushing" ? "上传中..." : "上传本地到云端"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSyncNow}
-                  disabled={busyAction !== null || !hasConfig}
-                  className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-400"
-                >
-                  {busyAction === "syncing" ? "同步中..." : "立即同步"}
-                </button>
+            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+              地址填服务根路径，路径填同步目录或具体 JSON 文件名。目录模式下会自动补 `sync.json`。
+            </p>
+          </div>
+          {resolvedFileUrl && (
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300 md:max-w-md">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
+                目标文件
               </div>
-              <button
-                type="button"
-                onClick={closeDialog}
-                disabled={busyAction !== null}
-                className="self-end rounded-lg px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                关闭
-              </button>
+              <div className="mt-2 break-all font-mono text-xs leading-6">{resolvedFileUrl}</div>
             </div>
+          )}
+        </div>
+
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <div>
+            <label htmlFor="webdav-base-url" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-100">
+              WebDAV 地址
+            </label>
+            <input
+              id="webdav-base-url"
+              type="url"
+              value={draft.baseUrl}
+              onChange={(event) => updateDraft((prev) => ({ ...prev, baseUrl: event.target.value }))}
+              placeholder="https://dav.example.com/remote.php/dav/files/you"
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-blue-400 focus:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:bg-gray-800"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="webdav-path" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-100">
+              WebDAV 路径
+            </label>
+            <input
+              id="webdav-path"
+              type="text"
+              value={draft.path}
+              onChange={(event) => updateDraft((prev) => ({ ...prev, path: event.target.value }))}
+              placeholder="/MFA-Tool/"
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-blue-400 focus:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:bg-gray-800"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="webdav-username" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-100">
+              用户名
+            </label>
+            <input
+              id="webdav-username"
+              type="text"
+              value={draft.username}
+              onChange={(event) => updateDraft((prev) => ({ ...prev, username: event.target.value }))}
+              placeholder="admin"
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-blue-400 focus:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:bg-gray-800"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="webdav-password" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-100">
+              密码
+            </label>
+            <input
+              id="webdav-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={passwordSaved ? "留空时使用系统钥匙串中的已保存密码" : "输入本次操作要用的密码"}
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-blue-400 focus:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:bg-gray-800"
+            />
           </div>
         </div>
-      )}
-    </>
+
+        <div className="mt-5 flex flex-col gap-3 text-sm text-gray-500 dark:text-gray-400 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <p>保存配置时，如果密码输入框有内容，会一起写入系统钥匙串。</p>
+            <p>不想改密码时可以留空，后续同步会继续使用已保存的密码。</p>
+          </div>
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={busyAction !== null}
+              className="rounded-2xl bg-gray-100 px-6 py-3 text-base font-semibold text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            >
+              {busyAction === "testing" ? "测试中..." : "测试连接"}
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveConfig}
+              disabled={busyAction !== null}
+              className="rounded-2xl bg-blue-500 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busyAction === "saving" ? "保存中..." : "保存配置"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">同步操作</h3>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              建议第一次先测试连接，再执行同步。当前删除不会跨端传播。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleClearSavedPassword}
+              disabled={busyAction !== null || !passwordSaved}
+              className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              清除已保存密码
+            </button>
+            <button
+              type="button"
+              onClick={handleClearConfig}
+              disabled={busyAction !== null}
+              className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              清空配置
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 xl:grid-cols-3">
+          <button
+            type="button"
+            onClick={handleSyncNow}
+            disabled={busyAction !== null || !hasConfig}
+            className="flex items-center justify-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-left text-base font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/15"
+          >
+            <ArrowsRightLeftIcon className="h-5 w-5" />
+            {busyAction === "syncing" ? "同步中..." : "立即同步"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePullAndMerge}
+            disabled={busyAction !== null || !hasConfig}
+            className="flex items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-left text-base font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-100 dark:hover:bg-gray-700"
+          >
+            <ArrowDownTrayIcon className="h-5 w-5" />
+            {busyAction === "pulling" ? "拉取中..." : "拉取并合并"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePushToCloud}
+            disabled={busyAction !== null || !hasConfig}
+            className="flex items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-left text-base font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-100 dark:hover:bg-gray-700"
+          >
+            <ArrowUpTrayIcon className="h-5 w-5" />
+            {busyAction === "pushing" ? "上传中..." : "上传本地数据"}
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
+          <div className="flex items-center gap-2 font-medium text-gray-800 dark:text-gray-100">
+            <CheckIcon className="h-4 w-4" />
+            当前同步策略
+          </div>
+          <p className="mt-2 leading-6">
+            先读取云端，再按最近更新时间合并，最后把合并结果回写到本地和云端。
+          </p>
+        </div>
+
+        {usingInsecureHttp && (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            当前使用的是 HTTP 明文传输。同步的是 2FA 密钥，建议改成 HTTPS 后再长期使用。
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

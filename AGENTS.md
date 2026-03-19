@@ -44,7 +44,7 @@
 - 已验证结论：只要 `src-tauri/tauri.conf.json` 仍启用 updater 公钥，本地执行 `npm run tauri -- build` 时如果没有注入 `TAURI_SIGNING_PRIVATE_KEY`，命令会在 updater 签名阶段报错退出；但 `.app`、`.dmg` 和 `.app.tar.gz` 可能已经产出。
 - 成功构建后，优先向用户报告以下产物路径：
   - `src-tauri/target/release/bundle/macos/MFA Tool.app`
-  - `src-tauri/target/release/bundle/dmg/MFA Tool_0.3.3_aarch64.dmg`
+  - `src-tauri/target/release/bundle/dmg/MFA Tool_0.3.4_aarch64.dmg`
 
 ## 测试与验证约定
 - 如果只是文案、注释或纯文档改动，可不强制运行桌面端构建，除非用户要求。
@@ -78,7 +78,7 @@
 - 项目是一个本地优先的 2FA / TOTP 管理工具，前端基于 React 19 + TypeScript + Vite 8 + Tailwind CSS 4，桌面壳使用 Tauri 2。
 - 主要能力：二维码导入、`otpauth://` URL 导入、Google Authenticator migration 导入、手动录入、分组管理、批量操作、重复检测、拖拽排序、备份导入导出、WebDAV 云同步、临时验证码查看、GitHub Release 驱动的应用内更新。
 - 业务数据主要保存在 Tauri 应用数据目录下的 `data/accounts.json` 和 `data/groups.json`。
-- WebDAV 的文件 URL 与用户名保存在浏览器 `localStorage`；WebDAV 密码保存在系统钥匙串，不写入 `localStorage`。
+- WebDAV 的地址、路径和用户名保存在浏览器 `localStorage`；WebDAV 密码保存在系统钥匙串，不写入 `localStorage`。
 - 主题、语言、排序偏好以及“稍后提醒某个更新版本”的偏好保存在浏览器 `localStorage`，不走 Tauri 文件存储。
 
 ## 先看哪些文件
@@ -133,6 +133,8 @@
   分组页由 `GroupPage` 承担，负责按分组查看账户、打开分组管理面板。
 - `temp`
   临时验证页由 `TempPanel` 承担，数据只存在 `App` 内存状态里，关闭应用即丢失。
+- `sync`
+  云同步页由 `WebDavSyncPanel` 承担，从侧边栏进入；顶部不再弹出单独的云同步按钮。
 
 ## 关键业务流
 - 二维码导入
@@ -156,7 +158,8 @@
   导出选中账户时会过滤账户，但当前仍带上全部 `groups`。
   导入备份会保留当前 `accounts` 和 `groups`，把备份内容按分组映射后合并进来；命中相同 `id`、`secret` 或 `name + issuer` 的账户会跳过，不覆盖现有数据。
 - WebDAV 云同步
-  `WebDavSyncPanel` 使用单个远端 `sync.json` 文件做同步介质，格式与现有备份 JSON 兼容。
+  `WebDavSyncPanel` 现在是独立页面，不再走顶栏弹窗。
+  配置项拆成 `WebDAV 地址`、`WebDAV 路径`、`用户名`、`密码`；目录模式下会自动补成远端 `sync.json` 文件，格式与现有备份 JSON 兼容。
   Rust 侧负责读取系统钥匙串里的 WebDAV 密码，并发起 GET/PUT 请求；前端不直接持久化密码。
   “立即同步”当前策略是：先从云端读取并按 `updatedAt` 合并，再把合并结果回写本地并上传回云端。
   当前版本不会传播删除 tombstone；跨端删除后，如果另一端仍保留该账号，下次同步可能把它带回来。

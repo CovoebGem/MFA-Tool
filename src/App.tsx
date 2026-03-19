@@ -8,8 +8,8 @@ import { TempPanel } from "./components/TempPanel";
 import type { TempEntry } from "./components/TempPanel";
 import DedupDialog from "./components/DedupDialog";
 import Toast from "./components/Toast";
-import BackupPanel from "./components/BackupPanel";
 import AppUpdateManager from "./components/AppUpdateManager";
+import BackupPanel from "./components/BackupPanel";
 import WebDavSyncPanel from "./components/WebDavSyncPanel";
 import { useAccounts } from "./hooks/useAccounts";
 import { useGroups } from "./hooks/useGroups";
@@ -170,6 +170,15 @@ function App() {
         );
       case "temp":
         return <TempPanel entries={tempEntries} onEntriesChange={setTempEntries} onSaveToAccount={handleSaveToAccount} />;
+      case "sync":
+        return (
+          <WebDavSyncPanel
+            accounts={accounts}
+            groups={groups}
+            onApplyData={persistAccountsAndGroups}
+            onToast={showToast}
+          />
+        );
     }
   };
 
@@ -192,15 +201,10 @@ function App() {
             {currentPage === "accounts" && "账户管理"}
             {currentPage === "groups" && "分组管理"}
             {currentPage === "temp" && "临时验证"}
+            {currentPage === "sync" && "云同步"}
           </h1>
           <div className="flex items-center gap-2">
             <AppUpdateManager onToast={showToast} />
-            <WebDavSyncPanel
-              accounts={accounts}
-              groups={groups}
-              onApplyData={persistAccountsAndGroups}
-              onToast={showToast}
-            />
             <BackupPanel
               accounts={accounts}
               groups={groups}

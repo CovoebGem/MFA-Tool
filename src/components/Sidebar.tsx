@@ -92,6 +92,26 @@ function ClockIcon({ className }: { className?: string }) {
   );
 }
 
+function CloudIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.25 15.75A4.5 4.5 0 0 1 6.75 11.25h.258a6 6 0 1 1 11.728 1.5 3.75 3.75 0 0 1 .014 7.5H6.75a4.5 4.5 0 0 1-4.5-4.5Z"
+      />
+    </svg>
+  );
+}
+
 function ChevronLeftIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -145,6 +165,7 @@ export default function Sidebar({
     { page: "home", icon: HomeIcon, labelKey: "nav.home" },
     { page: "accounts", icon: UserIcon, labelKey: "nav.accounts" },
     { page: "groups", icon: FolderIcon, labelKey: "nav.groups" },
+    { page: "sync", icon: CloudIcon, labelKey: "nav.sync" },
     { page: "temp", icon: ClockIcon, labelKey: "nav.temp" },
   ];
 
