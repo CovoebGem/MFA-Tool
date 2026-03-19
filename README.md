@@ -2,12 +2,6 @@
 
 一个基于 Tauri 2 + React 19 + TypeScript 构建的本地优先桌面验证器，用来管理 TOTP 两步验证账户、导入二维码并生成实时验证码。
 
-> 本次重命名后，桌面端应用名、仓库名和构建产物统一为 `MFA Tool`。应用启动时会尝试把旧 `2fa-web-tool` 标识符下的本地数据迁移到新目录。
-
-## 界面预览
-
-![MFA Tool 界面预览](./MFA-Tool.png)
-
 ## 核心功能
 
 - 扫描二维码图片、粘贴截图或拖拽图片导入 OTP 账户
@@ -106,42 +100,11 @@ src-tauri/
   icons/        打包图标资源
 ```
 
-## 发布流程
-
-发布前建议按下面顺序执行：
-
-```bash
-npm test
-npm run build
-npm run tauri -- build
-git push origin main
-git tag v0.3.2
-git push origin v0.3.2
-```
-
-仓库内已经包含 GitHub Actions 工作流：当推送 `v*` 标签时，会自动构建 Windows、macOS 和 Linux 的桌面产物，附加到对应 Release，并额外上传 `latest.json` 及签名文件供客户端应用内更新使用。
-
-当前 Linux 发版构建在 Debian 12 容器中执行，确保 Linux 产物构建环境稳定一致。
-
-在第一次使用应用内更新前，需要先在 GitHub 仓库 Secrets 中配置：
-
-- `TAURI_SIGNING_PRIVATE_KEY`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（如果私钥无密码，可留空或不设置）
-
-本地已为当前仓库生成 updater 公钥并写入 `src-tauri/tauri.conf.json`；私钥不会进入仓库，请妥善保管。
-
-> 应用内更新依赖 GitHub Release 资产可公开访问。如果仓库设为私有，客户端默认无法匿名读取 updater 所需的 `latest.json` 和安装包。
-
 ## 隐私与数据
 
 - 账户数据默认保存在本机 Tauri 应用数据目录
 - 当前版本不依赖远程同步服务
 - 备份文件是明文 JSON，请自行妥善保存
-
-## 文档
-
-- [部署与发版说明](./DEPLOY.md)
-- [更新日志](./CHANGELOG.md)
 
 ## License
 
