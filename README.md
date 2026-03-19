@@ -20,10 +20,10 @@
 - macOS：`.app` / `.dmg`（Apple Silicon、Intel）
 - Linux：`.AppImage` / `.deb`
 
-下载入口：
+Release 下载：
 [GitHub Releases](https://github.com/CovoebGem/MFA-Tool/releases)
 
-## 快速开始
+## 开发与构建
 
 ```bash
 # 安装依赖
@@ -76,7 +76,7 @@ npm run tauri -- build
 - 桌面端启动后会自动检查 GitHub Releases 中是否有新版本
 - 顶栏提供“检查更新”入口，可手动重新检测
 - 发现新版本后会弹出更新说明，支持下载、安装并重启进入新版本
-- 更新说明来自 GitHub Release body；如果你希望客户端展示更详细的更新日志，请在发版时写清楚 Release 描述
+- 客户端更新说明直接来自 GitHub Release body；Release 描述应包含版本重点、主要变更、兼容性影响与注意事项
 
 ## 技术栈
 
