@@ -56,7 +56,7 @@ export default function AccountPage({
 
   useEffect(() => {
     onSelectedIdsChange(new Set());
-  }, [accounts]);
+  }, [accounts, onSelectedIdsChange]);
 
   const toggleSelect = useCallback((id: string) => {
     const next = new Set(selectedIds);

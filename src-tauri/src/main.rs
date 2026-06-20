@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  twofa_tool_lib::run();
+  mfa_tool_lib::run();
 }

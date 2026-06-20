@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import fc from "fast-check";
@@ -64,6 +65,25 @@ const createDefaultProps = () => ({
   onSelectedIdsChange: vi.fn(),
 });
 
+function AccountPageHarness({
+  accounts,
+  props,
+}: {
+  accounts: OTPAccount[];
+  props: ReturnType<typeof createDefaultProps>;
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(props.selectedIds);
+
+  return (
+    <AccountPage
+      {...props}
+      accounts={accounts}
+      selectedIds={selectedIds}
+      onSelectedIdsChange={setSelectedIds}
+    />
+  );
+}
+
 describe("AccountPage Property Tests", () => {
   beforeEach(() => {
     cleanup();
@@ -77,7 +97,7 @@ describe("AccountPage Property Tests", () => {
       fc.property(arbNonEmptyAccounts, (accounts) => {
         cleanup();
         const props = createDefaultProps();
-        render(<AccountPage {...props} accounts={accounts} />);
+        render(<AccountPageHarness props={props} accounts={accounts} />);
 
         const selectAllButton = screen.getByLabelText("全选");
 
@@ -107,14 +127,14 @@ describe("AccountPage Property Tests", () => {
         ({ accounts, selectedSubset }) => {
           cleanup();
           const props = createDefaultProps();
-          render(<AccountPage {...props} accounts={accounts} />);
+          render(<AccountPageHarness props={props} accounts={accounts} />);
 
           // 逐个点击选中 subset 中的账户
           for (const account of selectedSubset) {
             const checkbox = screen.getByLabelText(
               `选择账户 ${account.issuer}`,
             );
-            checkbox.click();
+            fireEvent.click(checkbox);
           }
 
           const selectAllButton = screen.getByLabelText("全选");
@@ -156,14 +176,14 @@ describe("AccountPage Property Tests", () => {
         ({ accounts, selectedSubset }) => {
           cleanup();
           const props = createDefaultProps();
-          render(<AccountPage {...props} accounts={accounts} />);
+          render(<AccountPageHarness props={props} accounts={accounts} />);
 
           // 逐个点击选中 subset 中的账户
           for (const account of selectedSubset) {
             const checkbox = screen.getByLabelText(
               `选择账户 ${account.issuer}`,
             );
-            checkbox.click();
+            fireEvent.click(checkbox);
           }
 
           const selectedCount = selectedSubset.length;

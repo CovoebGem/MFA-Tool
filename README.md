@@ -1,6 +1,8 @@
-# 2FA Tool
+# MFA-Tool
 
 一个基于 Tauri + React + TypeScript 构建的桌面端 TOTP 两步验证工具。
+
+![MFA-Tool](docs/assets/MFA-Tool.png)
 
 ## 功能
 
@@ -24,7 +26,7 @@
 
 ```bash
 # 安装依赖
-npm install
+npm ci
 
 # 启动开发服务器（Web）
 npm run dev
@@ -41,10 +43,10 @@ npm run tauri build
 
 ## 下载
 
-前往 [Releases](https://github.com/CovoebGem/2fa-web-tool/releases) 下载各平台安装包：
+前往 [Releases](https://github.com/CovoebGem/mfa-tool/releases) 下载各平台安装包：
 
 - Windows: `.msi` / `.exe`
-- macOS: `.dmg`（Intel / Apple Silicon）
+- macOS: `.dmg`（Apple Silicon）
 - Linux: `.AppImage` / `.deb`
 
 ## License

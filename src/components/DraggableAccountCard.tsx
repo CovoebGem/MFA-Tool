@@ -60,6 +60,7 @@ export default function DraggableAccountCard({
         copiedTimerRef.current = null;
       }, 1500);
     } catch {
+      // 剪贴板不可用时静默忽略
     }
   }, []);
 

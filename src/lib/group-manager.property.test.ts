@@ -353,10 +353,10 @@ describe('Property 6: 编辑分组名称', () => {
 let storedGroupsData = '[]';
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(async (cmd: string, args?: any) => {
+  invoke: vi.fn(async (cmd: string, args?: { data: string }) => {
     if (cmd === 'read_groups') return storedGroupsData;
     if (cmd === 'write_groups') {
-      storedGroupsData = args.data;
+      storedGroupsData = args?.data ?? storedGroupsData;
       return;
     }
   }),

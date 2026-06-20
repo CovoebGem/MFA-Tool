@@ -220,7 +220,7 @@ export function parseOtpauthUrl(otpauthUrl: string): OTPAccount {
   }
 
   // 解析路径中的 name，可能包含 issuer 前缀（如 issuer:name）
-  let pathName = decodeURIComponent(url.pathname.replace(/^\//, ""));
+  const pathName = decodeURIComponent(url.pathname.replace(/^\//, ""));
   let issuer = url.searchParams.get("issuer") || "";
   let name = pathName;
 

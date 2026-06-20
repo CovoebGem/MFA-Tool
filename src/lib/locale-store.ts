@@ -12,6 +12,7 @@ export function saveLocale(locale: Locale): void {
   try {
     localStorage.setItem(LOCALE_KEY, locale);
   } catch {
+    // localStorage 不可用时静默忽略
   }
 }
 

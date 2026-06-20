@@ -70,7 +70,7 @@ describe("QR_Decoder", () => {
           bottomLeftFinderPattern: { x: 0, y: 0 },
           bottomRightAlignmentPattern: undefined,
         },
-      } as any);
+      } as NonNullable<ReturnType<typeof jsQR>>);
 
       const imageData = createFakeImageData(10, 10);
       const result = decodeQRFromImageData(imageData);

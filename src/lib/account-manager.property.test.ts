@@ -26,17 +26,17 @@ const otpAccountArb: fc.Arbitrary<OTPAccount> = fc.record({
 let storedData = '[]';
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(async (cmd: string, args?: any) => {
+  invoke: vi.fn(async (cmd: string, args?: { data: string }) => {
     if (cmd === 'read_accounts') return storedData;
     if (cmd === 'write_accounts') {
-      storedData = args.data;
+      storedData = args?.data ?? storedData;
       return;
     }
   }),
 }));
 
 /**
- * Feature: 2fa-web-tool, Property 3: 文件存储 round-trip
+ * Feature: MFA-Tool, Property 3: 文件存储 round-trip
  * Validates: Requirements 3.1, 3.2, 3.5
  *
  * 对于任意有效的 OTPAccount 数组，调用 saveAccounts 写入后，
@@ -65,7 +65,7 @@ describe('Property 3: 文件存储 round-trip', () => {
 });
 
 /**
- * Feature: 2fa-web-tool, Property 4: 添加账户增长列表
+ * Feature: MFA-Tool, Property 4: 添加账户增长列表
  * Validates: Requirements 2.1
  *
  * 对于任意现有账户列表和任意有效的新 OTPAccount 列表，
@@ -98,7 +98,7 @@ describe('Property 4: 添加账户增长列表', () => {
 });
 
 /**
- * Feature: 2fa-web-tool, Property 5: 删除账户缩减列表
+ * Feature: MFA-Tool, Property 5: 删除账户缩减列表
  * Validates: Requirements 3.4
  *
  * 对于任意包含至少一个账户的列表和其中任意一个账户的 id，

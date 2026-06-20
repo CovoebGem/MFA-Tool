@@ -1,4 +1,4 @@
-# 2FA Web Tool 构建与部署文档
+# MFA-Tool 构建与部署文档
 
 ## 开发环境搭建
 
@@ -66,7 +66,7 @@ npm install
 npm run tauri dev
 ```
 
-开发模式下前端运行在 `http://localhost:5173`，支持热更新。
+开发模式下前端运行在 `http://localhost:19872`，支持热更新。
 
 ## 构建
 
@@ -91,7 +91,7 @@ npm run tauri build
 | Linux   | `.AppImage`   | `src-tauri/target/release/bundle/appimage/` |
 | Linux   | `.deb`        | `src-tauri/target/release/bundle/deb/`      |
 
-> 注意：只能构建当前操作系统对应的安装包。跨平台构建需使用 CI/CD（如 GitHub Actions）。
+> 注意：只能构建当前操作系统对应的安装包。跨平台构建需使用 CI/CD（如 GitHub Actions）。当前 Release 默认构建 Windows、macOS Apple Silicon 和 Linux，不构建 macOS Intel。
 
 ## 测试
 
