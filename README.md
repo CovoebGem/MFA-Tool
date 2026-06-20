@@ -1,54 +1,121 @@
-# MFA-Tool
+# MFA Tool
 
-一个基于 Tauri + React + TypeScript 构建的桌面端 TOTP 两步验证工具。
+一个基于 Tauri 2 + React 19 + TypeScript 构建的本地优先桌面验证器，用来管理 TOTP 两步验证账户、导入二维码并生成实时验证码。
 
-![MFA-Tool](docs/assets/MFA-Tool.png)
+## 核心功能
 
-## 功能
+- 扫描二维码图片、粘贴截图或拖拽图片导入 OTP 账户
+- 支持 `otpauth://` URL 和 Google Authenticator migration 数据解析
+- 手动录入 Base32 密钥，快速补录账号
+- 账户分组、批量移动、重复账户检测
+- 自动排序与拖拽自定义排序
+- 临时验证码面板，适合一次性查看和复制
+- 本地 JSON 备份导入导出，导入时默认合并现有数据
+- WebDAV 云同步，支持测试连接、拉取合并、手动上传和一键同步
+- GitHub Release 驱动的应用内检查更新与一键升级
+- 所有账号数据默认只保存在本机应用数据目录
 
-- 管理 TOTP 账户，生成实时验证码
-- 支持扫描二维码 / 手动输入密钥 / otpauth:// URL 导入
-- 支持 Google Authenticator 迁移数据导入
-- 账户分组管理
-- 批量操作（移动、删除）
-- 重复账户检测
-- 排序与搜索
-- 数据本地存储，隐私安全
+## 支持平台
 
-## 技术栈
+- Windows：`.msi` / `.exe`
+- macOS：`.app` / `.dmg`（Apple Silicon）
+- Linux：`.AppImage` / `.deb`
 
-- 前端：React 19 + TypeScript + Tailwind CSS
-- 桌面：Tauri 2
-- 构建：Vite
-- 测试：Vitest + fast-check
+Release 下载：
+[GitHub Releases](https://github.com/CovoebGem/MFA-Tool/releases)
 
-## 开发
+## 开发与构建
 
 ```bash
 # 安装依赖
 npm ci
 
-# 启动开发服务器（Web）
+# 启动前端开发服务器
 npm run dev
 
 # 启动 Tauri 开发模式
-npm run tauri dev
+npm run tauri -- dev
 
 # 运行测试
 npm test
 
-# 构建桌面应用
-npm run tauri build
+# 构建前端
+npm run build
+
+# 构建桌面端安装包
+npm run tauri -- build
 ```
 
-## 下载
+开发模式下的前端端口固定为 `http://localhost:19872`，和 Tauri 配置保持一致。
 
-前往 [Releases](https://github.com/CovoebGem/mfa-tool/releases) 下载各平台安装包：
+## 使用说明
 
-- Windows: `.msi` / `.exe`
-- macOS: `.dmg`（Apple Silicon）
-- Linux: `.AppImage` / `.deb`
+### 导入账户
+
+- 首页支持点击上传、拖拽图片、`Ctrl+V` 粘贴二维码截图
+- 也支持手动输入 Base32 密钥
+- 支持直接粘贴 `otpauth://` URL
+- 遇到 Google Authenticator 导出的迁移二维码，会自动解析成多个账户
+
+### 管理账户
+
+- 可以按名称、服务商、创建时间自动排序
+- 也可以切换到拖拽模式手动排序
+- 支持账户编辑、删除、批量移动分组
+- 导入时会自动检测重复账户
+
+### 备份与恢复
+
+- 支持导出全部账户
+- 在账户页勾选后支持仅导出选中账户
+- 备份文件为 JSON，可重新导入恢复
+- 导入备份时默认保留当前账户和分组，仅把备份中的唯一账户合并进来
+- 命中相同 `id`、`secret` 或 `name + issuer` 的账户会跳过，不覆盖现有数据
+
+### WebDAV 云同步
+
+- 顶栏提供 WebDAV 云同步入口
+- 使用单个远端 `sync.json` 文件保存同步快照
+- 支持测试连接、从云端拉取并合并、把当前本地数据上传到云端、以及“一键同步”
+- WebDAV 密码默认保存在系统钥匙串，不写入浏览器 `localStorage`
+- 当前版本不会传播删除标记；如果一端删除了账号，而另一端仍保留，下次同步可能把该账号重新合并回来
+
+### 应用更新
+
+- 桌面端启动后会自动检查 GitHub Releases 中的可用更新
+- 顶栏提供“检查更新”入口，支持随时手动检测新版本
+- 检测到新版本后会显示更新说明，并支持直接下载、安装和重启升级
+- 客户端展示的更新说明来自 GitHub Release 描述，内容通常包括版本重点、主要变更、兼容性影响与注意事项
+
+## 技术栈
+
+- 前端：React 19、TypeScript、Vite 8、Tailwind CSS 4
+- 桌面端：Tauri 2
+- 测试：Vitest、Testing Library、fast-check
+- OTP 生成：`otpauth`
+- 二维码解析：`jsqr`
+
+## 项目结构
+
+```text
+src/
+  components/   页面和 UI 组件
+  hooks/        状态逻辑与定时刷新
+  lib/          解析、校验、排序、备份、去重等纯逻辑
+  contexts/     i18n 上下文
+  types/        领域模型与错误类型
+src-tauri/
+  src/          Rust 后端与 Tauri 命令
+  icons/        打包图标资源
+```
+
+## 隐私与数据
+
+- 账户数据默认保存在本机 Tauri 应用数据目录
+- 如果启用 WebDAV，同步文件会保存到你指定的 WebDAV 服务器
+- WebDAV 的 URL 和用户名保存在本地浏览器存储，密码保存在系统钥匙串
+- 备份文件是明文 JSON，请自行妥善保存
 
 ## License
 
-MIT
+[MIT](./LICENSE)

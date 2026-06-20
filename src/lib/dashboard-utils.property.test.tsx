@@ -221,7 +221,7 @@ describe('Property 3: 最近账户渲染包含必要信息', () => {
     algorithm: fc.constant('SHA1' as const),
     digits: fc.constantFrom(6, 8),
     period: fc.constantFrom(30, 60),
-    createdAt: fc.integer({ min: NOW - 30 * 24 * 60 * 60 * 1000, max: NOW }),
+    createdAt: fc.integer({ min: NOW - 3 * 24 * 60 * 60 * 1000, max: NOW }),
     groupId: fc.uuid(),
   });
 

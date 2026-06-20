@@ -38,3 +38,13 @@ coverage/
 icon-square-tmp.png
 2FA-trimmed.png
 2FA-square.png
+worktrees/
+
+# Local collaboration / private docs
+AGENTS.md
+CLAUDE.md
+.claude/
+邮件方案.md
+DEPLOY.md
+CHANGELOG.md
+MFA-Tool.png

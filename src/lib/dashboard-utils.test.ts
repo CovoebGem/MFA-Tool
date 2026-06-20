@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { computeStats, getRecentAccounts } from "./dashboard-utils";
 import type { OTPAccount, Group } from "../types";
 
@@ -121,6 +121,16 @@ describe("computeStats", () => {
 });
 
 describe("getRecentAccounts", () => {
+  const NOW = 1_000_000_000_000;
+
+  beforeEach(() => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("空数组输入返回空数组", () => {
     const result = getRecentAccounts([]);
     expect(result).toEqual([]);
@@ -134,16 +144,16 @@ describe("getRecentAccounts", () => {
   });
 
   it("按 createdAt 降序排列", () => {
-    const old = makeAccount({ createdAt: 1000 });
-    const mid = makeAccount({ createdAt: 2000 });
-    const recent = makeAccount({ createdAt: 3000 });
+    const old = makeAccount({ createdAt: NOW - 3000 });
+    const mid = makeAccount({ createdAt: NOW - 2000 });
+    const recent = makeAccount({ createdAt: NOW - 1000 });
     const result = getRecentAccounts([old, recent, mid]);
-    expect(result.map((a) => a.createdAt)).toEqual([3000, 2000, 1000]);
+    expect(result.map((a) => a.createdAt)).toEqual([NOW - 1000, NOW - 2000, NOW - 3000]);
   });
 
   it("超过 5 条记录时截断为 5 条", () => {
     const accounts = Array.from({ length: 8 }, (_, i) =>
-      makeAccount({ createdAt: i * 1000 })
+      makeAccount({ createdAt: NOW - i * 1000 })
     );
     const result = getRecentAccounts(accounts);
     expect(result).toHaveLength(5);
@@ -151,17 +161,65 @@ describe("getRecentAccounts", () => {
 
   it("截断后保留最新的 5 条", () => {
     const accounts = Array.from({ length: 8 }, (_, i) =>
-      makeAccount({ createdAt: (i + 1) * 1000 })
+      makeAccount({ createdAt: NOW - i * 1000 })
     );
     const result = getRecentAccounts(accounts);
     expect(result.map((a) => a.createdAt)).toEqual([
-      8000, 7000, 6000, 5000, 4000,
+      NOW,
+      NOW - 1000,
+      NOW - 2000,
+      NOW - 3000,
+      NOW - 4000,
+    ]);
+  });
+
+  it("只返回 3 天内的账户", () => {
+    const now = 1_000_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const accounts = [
+      makeAccount({ createdAt: now - ONE_DAY }),
+      makeAccount({ createdAt: now - 3 * ONE_DAY }),
+      makeAccount({ createdAt: now - 3 * ONE_DAY - 1 }),
+      makeAccount({ createdAt: now - 10 * ONE_DAY }),
+    ];
+
+    const result = getRecentAccounts(accounts);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((a) => a.createdAt)).toEqual([
+      now - ONE_DAY,
+      now - 3 * ONE_DAY,
+    ]);
+  });
+
+  it("新增账户后会挤掉最近列表里时间最早的一条", () => {
+    const now = 1_000_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const accounts = Array.from({ length: 5 }, (_, i) =>
+      makeAccount({
+        issuer: `Service${i + 1}`,
+        createdAt: now - (5 - i) * 1000,
+      })
+    );
+
+    const result = getRecentAccounts([
+      ...accounts,
+      makeAccount({ issuer: "Newest", createdAt: now }),
+    ]);
+
+    expect(result).toHaveLength(5);
+    expect(result.map((a) => a.issuer)).toEqual([
+      "Newest",
+      "Service5",
+      "Service4",
+      "Service3",
+      "Service2",
     ]);
   });
 
   it("恰好 5 条记录时全部返回", () => {
     const accounts = Array.from({ length: 5 }, (_, i) =>
-      makeAccount({ createdAt: (i + 1) * 1000 })
+      makeAccount({ createdAt: NOW - i * 1000 })
     );
     const result = getRecentAccounts(accounts);
     expect(result).toHaveLength(5);
@@ -169,11 +227,11 @@ describe("getRecentAccounts", () => {
 
   it("自定义 limit 参数", () => {
     const accounts = Array.from({ length: 10 }, (_, i) =>
-      makeAccount({ createdAt: i * 1000 })
+      makeAccount({ createdAt: NOW - i * 1000 })
     );
     const result = getRecentAccounts(accounts, 3);
     expect(result).toHaveLength(3);
-    expect(result.map((a) => a.createdAt)).toEqual([9000, 8000, 7000]);
+    expect(result.map((a) => a.createdAt)).toEqual([NOW, NOW - 1000, NOW - 2000]);
   });
 
   it("不修改原数组", () => {

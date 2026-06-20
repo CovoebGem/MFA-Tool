@@ -107,6 +107,7 @@ export function TempPanel({ entries, onEntriesChange, onSaveToAccount }: TempPan
   };
 
   const handleSave = (entry: TempEntry) => {
+    const now = Date.now();
     const account: OTPAccount = {
       id: crypto.randomUUID(),
       issuer: "",
@@ -117,7 +118,8 @@ export function TempPanel({ entries, onEntriesChange, onSaveToAccount }: TempPan
       digits: 6,
       period: 30,
       counter: 0,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
       groupId: DEFAULT_GROUP_ID,
     };
     onSaveToAccount(account);

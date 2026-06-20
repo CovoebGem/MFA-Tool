@@ -8,12 +8,16 @@ import { TempPanel } from "./components/TempPanel";
 import type { TempEntry } from "./components/TempPanel";
 import DedupDialog from "./components/DedupDialog";
 import Toast from "./components/Toast";
+import AppUpdateManager from "./components/AppUpdateManager";
 import BackupPanel from "./components/BackupPanel";
+import WebDavSyncPanel from "./components/WebDavSyncPanel";
 import { useAccounts } from "./hooks/useAccounts";
 import { useGroups } from "./hooks/useGroups";
+import { useViewportHeight } from "./hooks/useViewportHeight";
 import { skipDuplicates, overrideDuplicates } from "./lib/dedup-checker";
 import { saveGroups } from "./lib/group-manager";
 import { saveAccounts } from "./lib/account-manager";
+import { mergeBackupData } from "./lib/backup";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
@@ -25,6 +29,7 @@ function App() {
   const [tempEntries, setTempEntries] = useState<TempEntry[]>([]);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
+  const viewportHeight = useViewportHeight();
 
   const showToast = useCallback((message: string, type: "success" | "error") => setToast({ message, type }), []);
 
@@ -92,22 +97,37 @@ function App() {
     await addNewAccounts([account]);
   };
 
+  const persistAccountsAndGroups = useCallback(async (nextAccounts: OTPAccount[], nextGroups: Group[]) => {
+    setAccounts(nextAccounts);
+    setGroups(nextGroups);
+    await saveAccounts(nextAccounts);
+    await saveGroups(nextGroups);
+  }, [setAccounts, setGroups]);
+
   const handleImportBackup = async (importedAccounts: OTPAccount[], importedGroups: Group[]) => {
-    setAccounts(importedAccounts);
-    setGroups(importedGroups);
-    await saveAccounts(importedAccounts);
-    await saveGroups(importedGroups);
+    const merged = mergeBackupData(accounts, groups, importedAccounts, importedGroups);
+    await persistAccountsAndGroups(merged.accounts, merged.groups);
   };
 
   const handleReorderAccounts = async (reorderedAccounts: OTPAccount[]) => {
-    setAccounts(reorderedAccounts);
-    await saveAccounts(reorderedAccounts);
+    const now = Date.now();
+    const syncedAccounts = reorderedAccounts.map((account) => ({
+      ...account,
+      updatedAt: now,
+    }));
+    setAccounts(syncedAccounts);
+    await saveAccounts(syncedAccounts);
   };
 
   const handleNavigate = useCallback((page: Page) => {
     setCurrentPage(page);
     setSelectedAccountIds(new Set());
   }, []);
+
+  const handleGroupsUpdated = useCallback(async (updatedGroups: Group[]) => {
+    setGroups(updatedGroups);
+    await saveGroups(updatedGroups);
+  }, [setGroups]);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -117,7 +137,7 @@ function App() {
             accounts={accounts}
             groups={groups}
             onAccountsAdded={addNewAccounts}
-            onGroupsUpdated={setGroups}
+            onGroupsUpdated={handleGroupsUpdated}
             onDedupDetected={handleDedupDetected}
             onToast={showToast}
           />
@@ -150,32 +170,49 @@ function App() {
         );
       case "temp":
         return <TempPanel entries={tempEntries} onEntriesChange={setTempEntries} onSaveToAccount={handleSaveToAccount} />;
+      case "sync":
+        return (
+          <WebDavSyncPanel
+            accounts={accounts}
+            groups={groups}
+            onApplyData={persistAccountsAndGroups}
+            onToast={showToast}
+          />
+        );
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="bg-gray-100 dark:bg-gray-900" style={{ minHeight: viewportHeight }}>
       <Sidebar
         currentPage={currentPage}
         onNavigate={handleNavigate}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        viewportHeight={viewportHeight}
       />
-      <main className={`${sidebarCollapsed ? "ml-16" : "ml-48"} min-h-screen transition-all duration-200`}>
+      <main
+        className={`${sidebarCollapsed ? "ml-16" : "ml-48"} transition-all duration-200`}
+        style={{ minHeight: viewportHeight }}
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
           <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
             {currentPage === "home" && "首页"}
             {currentPage === "accounts" && "账户管理"}
             {currentPage === "groups" && "分组管理"}
             {currentPage === "temp" && "临时验证"}
+            {currentPage === "sync" && "云同步"}
           </h1>
-          <BackupPanel
-            accounts={accounts}
-            groups={groups}
-            selectedAccountIds={currentPage === "accounts" ? selectedAccountIds : undefined}
-            onImport={handleImportBackup}
-            onToast={showToast}
-          />
+          <div className="flex items-center gap-2">
+            <AppUpdateManager onToast={showToast} />
+            <BackupPanel
+              accounts={accounts}
+              groups={groups}
+              selectedAccountIds={currentPage === "accounts" ? selectedAccountIds : undefined}
+              onImport={handleImportBackup}
+              onToast={showToast}
+            />
+          </div>
         </div>
         {error && (
           <div

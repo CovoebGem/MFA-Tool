@@ -64,6 +64,21 @@ describe("RecentAccounts", () => {
     expect(items).toHaveLength(5);
   });
 
+  it("only renders accounts from the last 3 days", () => {
+    const now = Date.now();
+    const accounts = [
+      makeAccount({ issuer: "Recent", name: "recent@test.com", createdAt: now - 2 * 24 * 60 * 60 * 1000 }),
+      makeAccount({ issuer: "Boundary", name: "boundary@test.com", createdAt: now - 3 * 24 * 60 * 60 * 1000 }),
+      makeAccount({ issuer: "Expired", name: "expired@test.com", createdAt: now - 3 * 24 * 60 * 60 * 1000 - 1 }),
+    ];
+
+    render(<RecentAccounts accounts={accounts} />);
+
+    expect(screen.getByText("Recent")).toBeInTheDocument();
+    expect(screen.getByText("Boundary")).toBeInTheDocument();
+    expect(screen.queryByText("Expired")).not.toBeInTheDocument();
+  });
+
   it("displays hours relative time correctly", () => {
     const now = Date.now();
     const accounts = [

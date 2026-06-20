@@ -25,6 +25,11 @@ const nonDefaultGroupArb: fc.Arbitrary<Group> = fc.record({
   createdAt: fc.integer({ min: 0, max: Date.now() }),
 });
 
+const withUpdatedAt = (group: Group): Group => ({
+  ...group,
+  updatedAt: group.updatedAt ?? group.createdAt,
+});
+
 /** 生成包含默认分组的分组列表（名称唯一） */
 const groupListArb: fc.Arbitrary<Group[]> = fc
   .array(nonDefaultGroupArb, { minLength: 0, maxLength: 10 })
@@ -401,7 +406,7 @@ describe('Property 7: 分组数据 round-trip', () => {
         async (groups) => {
           await saveGroups(groups);
           const loaded = await loadGroups();
-          expect(loaded).toEqual(groups);
+          expect(loaded).toEqual(groups.map(withUpdatedAt));
         },
       ),
       { numRuns: 100 },

@@ -7,6 +7,7 @@ export const translations = {
       accounts: "账户",
       groups: "分组",
       temp: "临时",
+      sync: "云同步",
     },
     home: {
       title: "首页",
@@ -88,6 +89,7 @@ export const translations = {
       accounts: "Accounts",
       groups: "Groups",
       temp: "Temp",
+      sync: "Sync",
     },
     home: {
       title: "Home",

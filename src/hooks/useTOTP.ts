@@ -1,5 +1,19 @@
 import { useState, useEffect, useRef } from "react";
-import { generateTOTP, getRemainingSeconds } from "../lib/totp-generator";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  generateTOTP,
+  getCurrentTimeStep,
+  getRemainingSeconds,
+} from "../lib/totp-generator";
+import { getRuntimeNowMs, syncRuntimeClock } from "../lib/runtime-clock";
+
+const CLOCK_RECALIBRATE_INTERVAL_MS = 60_000;
+
+function getMillisecondsUntilNextSecond(timestamp: number = getRuntimeNowMs()): number {
+  const remainder = timestamp % 1000;
+  return remainder === 0 ? 1000 : 1000 - remainder;
+}
 
 /**
  * 管理 TOTP 验证码生成和倒计时状态
@@ -13,51 +27,123 @@ export function useTOTP(
   period: number = 30,
   digits: number = 6,
 ): { code: string; remaining: number } {
+  const initialTimestamp = getRuntimeNowMs();
   const [code, setCode] = useState(() =>
-    secret ? generateTOTP(secret, period, digits) : "",
+    secret ? generateTOTP(secret, period, digits, initialTimestamp) : "",
   );
-  const [remaining, setRemaining] = useState(() => getRemainingSeconds(period));
+  const [remaining, setRemaining] = useState(() =>
+    getRemainingSeconds(period, initialTimestamp),
+  );
+  const timeStepRef = useRef<number | null>(
+    secret ? getCurrentTimeStep(period, initialTimestamp) : null,
+  );
 
-  const secretRef = useRef(secret);
-  const periodRef = useRef(period);
-  const digitsRef = useRef(digits);
-
-  // secret/period/digits 变化时立即重新生成
   useEffect(() => {
-    secretRef.current = secret;
-    periodRef.current = period;
-    digitsRef.current = digits;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let recalibrateIntervalId: ReturnType<typeof setInterval> | null = null;
+    let unlistenWindowFocus: (() => void) | null = null;
+    let disposed = false;
 
-    if (secret) {
-      setCode(generateTOTP(secret, period, digits));
-    } else {
-      setCode("");
-    }
-    setRemaining(getRemainingSeconds(period));
-  }, [secret, period, digits]);
-
-  // 每秒更新倒计时，窗口到期时重新生成验证码
-  useEffect(() => {
-    if (!secret) return;
-
-    const intervalId = setInterval(() => {
-      const newRemaining = getRemainingSeconds(periodRef.current);
-      setRemaining(newRemaining);
-
-      // 当 remaining 等于 period 时，说明进入了新的时间窗口
-      if (newRemaining === periodRef.current) {
-        setCode(
-          generateTOTP(
-            secretRef.current,
-            periodRef.current,
-            digitsRef.current,
-          ),
-        );
+    const clearScheduledSync = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
-    }, 1000);
+    };
 
-    return () => clearInterval(intervalId);
-  }, [secret]);
+    const sync = (timestamp: number = getRuntimeNowMs()) => {
+      setRemaining(getRemainingSeconds(period, timestamp));
+
+      if (!secret) {
+        timeStepRef.current = null;
+        setCode("");
+        return;
+      }
+
+      const nextStep = getCurrentTimeStep(period, timestamp);
+      if (timeStepRef.current !== nextStep) {
+        timeStepRef.current = nextStep;
+        setCode(generateTOTP(secret, period, digits, timestamp));
+      }
+    };
+
+    const scheduleNextSync = () => {
+      clearScheduledSync();
+      timeoutId = setTimeout(() => {
+        sync(getRuntimeNowMs());
+        scheduleNextSync();
+      }, getMillisecondsUntilNextSecond(getRuntimeNowMs()));
+    };
+
+    const resyncAndSchedule = async () => {
+      if (document.visibilityState === "hidden") {
+        clearScheduledSync();
+        return;
+      }
+
+      await syncRuntimeClock();
+      if (disposed) {
+        return;
+      }
+
+      sync(getRuntimeNowMs());
+      scheduleNextSync();
+    };
+
+    timeStepRef.current = null;
+    void resyncAndSchedule();
+
+    const handleWindowFocus = () => {
+      void resyncAndSchedule();
+    };
+
+    const handleVisibilityChange = () => {
+      void resyncAndSchedule();
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    recalibrateIntervalId = setInterval(() => {
+      void resyncAndSchedule();
+    }, CLOCK_RECALIBRATE_INTERVAL_MS);
+
+    if (isTauri()) {
+      void getCurrentWindow()
+        .onFocusChanged(({ payload: focused }) => {
+          if (focused) {
+            void resyncAndSchedule();
+            return;
+          }
+
+          clearScheduledSync();
+        })
+        .then((unlisten) => {
+          if (disposed) {
+            unlisten();
+            return;
+          }
+
+          unlistenWindowFocus = unlisten;
+        })
+        .catch(() => {
+          // ignore desktop focus listener setup failures and rely on DOM events
+        });
+    }
+
+    return () => {
+      disposed = true;
+      clearScheduledSync();
+      if (recalibrateIntervalId !== null) {
+        clearInterval(recalibrateIntervalId);
+      }
+      if (unlistenWindowFocus) {
+        unlistenWindowFocus();
+      }
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [secret, period, digits]);
 
   return { code, remaining };
 }

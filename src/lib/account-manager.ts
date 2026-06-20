@@ -3,6 +3,17 @@ import type { OTPAccount } from "../types";
 
 const DATA_FILE = "accounts.json";
 
+function normalizeUpdatedAt(account: OTPAccount): OTPAccount {
+  if (account.updatedAt !== undefined) {
+    return account;
+  }
+
+  return {
+    ...account,
+    updatedAt: account.createdAt,
+  };
+}
+
 /**
  * 从应用目录下的 data/ 文件夹加载所有账户
  * 通过 Tauri invoke 调用 Rust 后端读取文件
@@ -32,7 +43,7 @@ export function addAccounts(
   existing: OTPAccount[],
   newAccounts: OTPAccount[],
 ): OTPAccount[] {
-  return [...existing, ...newAccounts];
+  return [...existing, ...newAccounts.map(normalizeUpdatedAt)];
 }
 
 /**
@@ -47,8 +58,9 @@ export function updateAccount(
   id: string,
   updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>,
 ): OTPAccount[] {
+  const now = Date.now();
   return accounts.map((a) =>
-    a.id === id ? { ...a, ...updates } : a,
+    a.id === id ? { ...a, ...updates, updatedAt: now } : a,
   );
 }
 
@@ -74,8 +86,11 @@ export function moveAccountToGroup(
   accountId: string,
   groupId: string,
 ): OTPAccount[] {
+  const now = Date.now();
   return accounts.map((account) =>
-    account.id === accountId ? { ...account, groupId } : account,
+    account.id === accountId && account.groupId !== groupId
+      ? { ...account, groupId, updatedAt: now }
+      : account,
   );
 }
 
@@ -92,8 +107,11 @@ export function moveAccountsToGroup(
   groupId: string,
 ): OTPAccount[] {
   const idSet = new Set(accountIds);
+  const now = Date.now();
   return accounts.map((account) =>
-    idSet.has(account.id) ? { ...account, groupId } : account,
+    idSet.has(account.id) && account.groupId !== groupId
+      ? { ...account, groupId, updatedAt: now }
+      : account,
   );
 }
 

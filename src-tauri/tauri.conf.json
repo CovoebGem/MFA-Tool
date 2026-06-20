@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "MFA-Tool",
-  "version": "0.2.0",
-  "identifier": "com.covoebgem.mfatool",
+  "productName": "MFA Tool",
+  "version": "0.3.7",
+  "identifier": "com.mfa-tool.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:19872",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "MFA-Tool",
+        "title": "MFA Tool",
         "width": 800,
         "height": 600,
         "resizable": true,
@@ -25,6 +25,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -33,5 +34,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFCM0ZEQzc1QzlBRTJGQjYKUldTMkw2N0pkZHcvRzM3TFBTS2tsNXdvTTlNenpKZngxOGljOVY5RkMrYVZ2d203cnZuMWRLL3UK",
+      "endpoints": [
+        "https://github.com/CovoebGem/MFA-Tool/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

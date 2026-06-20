@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { generateTOTP, getRemainingSeconds } from "./totp-generator";
+import {
+  generateTOTP,
+  getCurrentTimeStep,
+  getRemainingSeconds,
+} from "./totp-generator";
 
 describe("generateTOTP", () => {
   it("should generate a 6-digit numeric string", () => {
@@ -51,6 +55,15 @@ describe("generateTOTP", () => {
 
     vi.restoreAllMocks();
   });
+
+  it("should use the explicit timestamp when provided", () => {
+    const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+    vi.spyOn(Date, "now").mockReturnValue(123456789000);
+
+    const code = generateTOTP(secret, 30, 8, 59000);
+    expect(code).toBe("94287082");
+  });
 });
 
 describe("getRemainingSeconds", () => {
@@ -82,5 +95,17 @@ describe("getRemainingSeconds", () => {
 
     vi.spyOn(Date, "now").mockReturnValue(45000);
     expect(getRemainingSeconds(60)).toBe(15);
+  });
+
+  it("should use the explicit timestamp when provided", () => {
+    vi.spyOn(Date, "now").mockReturnValue(45000);
+    expect(getRemainingSeconds(30, 0)).toBe(30);
+  });
+});
+
+describe("getCurrentTimeStep", () => {
+  it("should return the current time-step counter", () => {
+    expect(getCurrentTimeStep(30, 59000)).toBe(1);
+    expect(getCurrentTimeStep(30, 60000)).toBe(2);
   });
 });

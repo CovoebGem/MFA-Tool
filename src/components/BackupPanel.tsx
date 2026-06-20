@@ -109,7 +109,7 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
       const text = await readTextFile(filePath);
       const data = parseBackupJSON(text);
       onImport(data.accounts, data.groups);
-      onToast(`成功导入 ${data.accounts.length} 个账户`, "success");
+      onToast("成功导入备份，已合并现有数据", "success");
     } catch (err) {
       const message = err instanceof Error ? err.message : "导入失败";
       onToast(message, "error");
@@ -127,7 +127,7 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
       const text = await file.text();
       const data = parseBackupJSON(text);
       onImport(data.accounts, data.groups);
-      onToast(`成功导入 ${data.accounts.length} 个账户`, "success");
+      onToast("成功导入备份，已合并现有数据", "success");
     } catch (err) {
       const message = err instanceof Error ? err.message : "导入失败";
       onToast(message, "error");

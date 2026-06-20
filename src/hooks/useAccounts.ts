@@ -12,6 +12,28 @@ import {
 import { checkDuplicates } from "../lib/dedup-checker";
 import { DEFAULT_GROUP_ID } from "../lib/group-manager";
 
+function normalizeLoadedAccounts(data: OTPAccount[]) {
+  let needsMigration = false;
+
+  const accounts = data.map((account) => {
+    let nextAccount = account;
+
+    if (!account.groupId) {
+      needsMigration = true;
+      nextAccount = { ...nextAccount, groupId: DEFAULT_GROUP_ID };
+    }
+
+    if (nextAccount.updatedAt === undefined) {
+      needsMigration = true;
+      nextAccount = { ...nextAccount, updatedAt: nextAccount.createdAt };
+    }
+
+    return nextAccount;
+  });
+
+  return { accounts, needsMigration };
+}
+
 export function useAccounts() {
   const [accounts, setAccounts] = useState<OTPAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,15 +45,7 @@ export function useAccounts() {
       try {
         const data = await loadAccounts();
         if (!cancelled) {
-          // 数据迁移：为缺少 groupId 的账户补充默认分组 ID
-          let needsMigration = false;
-          const migrated = data.map((account) => {
-            if (!account.groupId) {
-              needsMigration = true;
-              return { ...account, groupId: DEFAULT_GROUP_ID };
-            }
-            return account;
-          });
+          const { accounts: migrated, needsMigration } = normalizeLoadedAccounts(data);
 
           setAccounts(migrated);
 
@@ -122,14 +136,7 @@ export function useAccounts() {
     try {
       setError(null);
       const data = await loadAccounts();
-      let needsMigration = false;
-      const migrated = data.map((account) => {
-        if (!account.groupId) {
-          needsMigration = true;
-          return { ...account, groupId: DEFAULT_GROUP_ID };
-        }
-        return account;
-      });
+      const { accounts: migrated, needsMigration } = normalizeLoadedAccounts(data);
       setAccounts(migrated);
       if (needsMigration) {
         await saveAccounts(migrated);
