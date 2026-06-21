@@ -14,7 +14,7 @@ node_modules/
 dist/
 dist-ssr/
 src-tauri/target/
-src-tauri/gen/schemas/
+src-tauri/gen/
 coverage/
 
 # Local environment
@@ -48,3 +48,7 @@ CLAUDE.md
 DEPLOY.md
 CHANGELOG.md
 MFA-Tool.png
+
+# Local-only archived docs/assets
+docs/local/
+docs/assets/local/
