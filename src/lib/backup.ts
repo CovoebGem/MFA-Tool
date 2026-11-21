@@ -13,6 +13,42 @@ export interface MergedBackupData {
   groups: Group[];
 }
 
+export const MAX_SAFE_PERIOD_SECONDS = Math.floor(Number.MAX_SAFE_INTEGER / 1000);
+
+export function isValidPeriod(period: unknown): period is number {
+  return (
+    typeof period === "number" &&
+    Number.isSafeInteger(period) &&
+    period > 0 &&
+    period <= MAX_SAFE_PERIOD_SECONDS
+  );
+}
+
+export function isValidDigits(digits: unknown): digits is number {
+  return typeof digits === "number" && Number.isInteger(digits) && digits >= 4 && digits <= 10;
+}
+
+export function isValidCounter(counter: unknown): counter is number {
+  return typeof counter === "number" && Number.isSafeInteger(counter) && counter >= 0;
+}
+
+export function sanitizeAccountNumbers(account: OTPAccount): OTPAccount {
+  const period = isValidPeriod(account.period) ? account.period : 30;
+  const digits = isValidDigits(account.digits) ? account.digits : 6;
+  const counter = isValidCounter(account.counter) ? account.counter : 0;
+
+  if (period === account.period && digits === account.digits && counter === account.counter) {
+    return account;
+  }
+
+  return {
+    ...account,
+    period,
+    digits,
+    counter,
+  };
+}
+
 function ensureDefaultGroup(groups: Group[]): Group[] {
   if (groups.some((group) => group.isDefault || group.id === DEFAULT_GROUP_ID)) {
     return groups;
@@ -54,6 +90,9 @@ export function validateBackupData(data: unknown): data is BackupData {
     if (typeof a.issuer !== "string") return false;
     if (typeof a.name !== "string") return false;
     if (typeof a.secret !== "string") return false;
+    if (a.period !== undefined && !isValidPeriod(a.period)) return false;
+    if (a.digits !== undefined && !isValidDigits(a.digits)) return false;
+    if (a.counter !== undefined && !isValidCounter(a.counter)) return false;
   }
 
   for (const group of obj.groups) {
@@ -145,11 +184,11 @@ export function mergeBackupData(
     const mappedGroupId = groupIdMap.get(importedAccount.groupId)
       ?? (groupsById.has(importedAccount.groupId) ? importedAccount.groupId : defaultGroup.id);
 
-    const mergedAccount: OTPAccount = {
+    const mergedAccount: OTPAccount = sanitizeAccountNumbers({
       ...importedAccount,
       groupId: mappedGroupId,
       ...(shouldAssignOrder ? { order: ++nextOrder } : {}),
-    };
+    });
 
     mergedAccounts.push(mergedAccount);
     existingIds.add(mergedAccount.id);
@@ -163,8 +202,13 @@ export function mergeBackupData(
   };
 }
 
-export function downloadFile(content: string, filename: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType });
+export function downloadFile(
+  content: string | Uint8Array,
+  filename: string,
+  mimeType: string,
+): void {
+  const part: BlobPart = typeof content === "string" ? content : new Uint8Array(content);
+  const blob = new Blob([part], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

@@ -6,6 +6,7 @@ import {
   getCurrentTimeStep,
   getRemainingSeconds,
 } from "../lib/totp-generator";
+import { isValidDigits, isValidPeriod } from "../lib/backup";
 import { getRuntimeNowMs, syncRuntimeClock } from "../lib/runtime-clock";
 
 const CLOCK_RECALIBRATE_INTERVAL_MS = 60_000;
@@ -13,6 +14,23 @@ const CLOCK_RECALIBRATE_INTERVAL_MS = 60_000;
 function getMillisecondsUntilNextSecond(timestamp: number = getRuntimeNowMs()): number {
   const remainder = timestamp % 1000;
   return remainder === 0 ? 1000 : 1000 - remainder;
+}
+
+function safeGenerateTOTP(
+  secret: string,
+  period: number,
+  digits: number,
+  hasValidParams: boolean,
+  timestamp: number,
+): string {
+  if (!secret || !hasValidParams) {
+    return "";
+  }
+  try {
+    return generateTOTP(secret, period, digits, timestamp);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -27,15 +45,19 @@ export function useTOTP(
   period: number = 30,
   digits: number = 6,
 ): { code: string; remaining: number } {
+  const hasValidParams = isValidPeriod(period) && isValidDigits(digits);
+  const safePeriod = isValidPeriod(period) ? period : 30;
+  const safeDigits = isValidDigits(digits) ? digits : 6;
+
   const initialTimestamp = getRuntimeNowMs();
   const [code, setCode] = useState(() =>
-    secret ? generateTOTP(secret, period, digits, initialTimestamp) : "",
+    safeGenerateTOTP(secret, safePeriod, safeDigits, hasValidParams, initialTimestamp),
   );
   const [remaining, setRemaining] = useState(() =>
-    getRemainingSeconds(period, initialTimestamp),
+    getRemainingSeconds(safePeriod, initialTimestamp),
   );
   const timeStepRef = useRef<number | null>(
-    secret ? getCurrentTimeStep(period, initialTimestamp) : null,
+    secret && hasValidParams ? getCurrentTimeStep(safePeriod, initialTimestamp) : null,
   );
 
   useEffect(() => {
@@ -52,18 +74,18 @@ export function useTOTP(
     };
 
     const sync = (timestamp: number = getRuntimeNowMs()) => {
-      setRemaining(getRemainingSeconds(period, timestamp));
+      setRemaining(getRemainingSeconds(safePeriod, timestamp));
 
-      if (!secret) {
+      if (!secret || !hasValidParams) {
         timeStepRef.current = null;
         setCode("");
         return;
       }
 
-      const nextStep = getCurrentTimeStep(period, timestamp);
+      const nextStep = getCurrentTimeStep(safePeriod, timestamp);
       if (timeStepRef.current !== nextStep) {
         timeStepRef.current = nextStep;
-        setCode(generateTOTP(secret, period, digits, timestamp));
+        setCode(safeGenerateTOTP(secret, safePeriod, safeDigits, hasValidParams, timestamp));
       }
     };
 
@@ -81,7 +103,11 @@ export function useTOTP(
         return;
       }
 
-      await syncRuntimeClock();
+      try {
+        await syncRuntimeClock();
+      } catch {
+        // 宿主时钟校准失败时继续使用当前可用时钟调度
+      }
       if (disposed) {
         return;
       }
@@ -143,7 +169,7 @@ export function useTOTP(
       window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [secret, period, digits]);
+  }, [secret, safePeriod, safeDigits, hasValidParams]);
 
   return { code, remaining };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Group, OTPAccount } from "../types";
-import { mergeBackupData } from "./backup";
+import { mergeBackupData, parseBackupJSON, validateBackupData } from "./backup";
 
 function createAccount(overrides: Partial<OTPAccount>): OTPAccount {
   return {
@@ -129,5 +129,37 @@ describe("mergeBackupData", () => {
 
     expect(merged.accounts).toEqual(existingAccounts);
     expect(merged.groups).toEqual(existingGroups);
+  });
+
+  it("拒绝 period/digits/counter 非法的备份数据", () => {
+    const base = {
+      version: 1,
+      exportedAt: "2026-01-01T00:00:00.000Z",
+      groups: [createGroup({ id: "default", name: "默认", isDefault: true })],
+    };
+
+    const badPayloads = [
+      { ...base, accounts: [{ ...createAccount({}), period: 0 }] },
+      { ...base, accounts: [{ ...createAccount({}), period: -30 }] },
+      { ...base, accounts: [{ ...createAccount({}), period: 1e308 }] },
+      { ...base, accounts: [{ ...createAccount({}), period: Number.MAX_SAFE_INTEGER }] },
+      { ...base, accounts: [{ ...createAccount({}), period: { valueOf: null, toString: null } }] },
+      { ...base, accounts: [{ ...createAccount({}), digits: 0 }] },
+      { ...base, accounts: [{ ...createAccount({}), digits: 6.5 }] },
+      { ...base, accounts: [{ ...createAccount({}), digits: 11 }] },
+      { ...base, accounts: [{ ...createAccount({}), counter: -1 }] },
+      { ...base, accounts: [{ ...createAccount({}), counter: 1e308 }] },
+    ];
+
+    for (const payload of badPayloads) {
+      expect(validateBackupData(payload)).toBe(false);
+      expect(() => parseBackupJSON(JSON.stringify(payload))).toThrow("无效的备份文件格式");
+    }
+
+    const validJson = JSON.stringify({
+      ...base,
+      accounts: [createAccount({ period: 30, digits: 6, counter: 0 })],
+    });
+    expect(parseBackupJSON(validJson).accounts).toHaveLength(1);
   });
 });

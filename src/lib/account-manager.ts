@@ -21,7 +21,11 @@ function normalizeUpdatedAt(account: OTPAccount): OTPAccount {
  */
 export async function loadAccounts(): Promise<OTPAccount[]> {
   const json = await invoke<string>("read_accounts");
-  return JSON.parse(json) as OTPAccount[];
+  const parsed: unknown = JSON.parse(json);
+  if (!Array.isArray(parsed)) {
+    throw new Error("账户数据格式无效");
+  }
+  return parsed as OTPAccount[];
 }
 
 /**
@@ -72,6 +76,20 @@ export function updateAccount(
  */
 export function removeAccount(accounts: OTPAccount[], id: string): OTPAccount[] {
   return accounts.filter((a) => a.id !== id);
+}
+
+/**
+ * 批量删除指定 ID 集合中的账户
+ * @param accounts - 现有账户列表
+ * @param ids - 要删除的账户 ID 集合
+ * @returns 更新后的账户列表
+ */
+export function removeAccounts(accounts: OTPAccount[], ids: Iterable<string>): OTPAccount[] {
+  const idSet = new Set(ids);
+  if (idSet.size === 0) {
+    return accounts;
+  }
+  return accounts.filter((a) => !idSet.has(a.id));
 }
 
 /**

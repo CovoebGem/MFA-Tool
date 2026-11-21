@@ -1,6 +1,14 @@
-import { describe, it, expect } from "vitest";
-import { addAccounts, removeAccount, moveAccountsToGroup } from "./account-manager";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { addAccounts, removeAccount, removeAccounts, moveAccountsToGroup, loadAccounts } from "./account-manager";
 import type { OTPAccount } from "../types";
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: mocks.invoke,
+}));
 
 function makeAccount(overrides: Partial<OTPAccount> = {}): OTPAccount {
   return {
@@ -104,6 +112,26 @@ describe("removeAccount", () => {
   });
 });
 
+describe("removeAccounts", () => {
+  it("removes all accounts whose id is in the target collection", () => {
+    const accounts = [
+      makeAccount({ id: "a1" }),
+      makeAccount({ id: "a2" }),
+      makeAccount({ id: "a3" }),
+      makeAccount({ id: "a4" }),
+    ];
+
+    const result = removeAccounts(accounts, ["a1", "a3", "missing"]);
+
+    expect(result.map((a) => a.id)).toEqual(["a2", "a4"]);
+  });
+
+  it("keeps original order and handles empty id list", () => {
+    const accounts = [makeAccount({ id: "a1" }), makeAccount({ id: "a2" })];
+    expect(removeAccounts(accounts, [])).toEqual(accounts);
+  });
+});
+
 
 /**
  * moveAccountsToGroup 单元测试
@@ -182,5 +210,19 @@ describe("moveAccountsToGroup", () => {
   it("should return empty array when input accounts is empty", () => {
     const result = moveAccountsToGroup([], ["any-id"], "group-z");
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("loadAccounts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects non-array JSON payloads such as {} instead of returning malformed data", async () => {
+    mocks.invoke.mockResolvedValueOnce("{}");
+    await expect(loadAccounts()).rejects.toThrow("账户数据格式无效");
+
+    mocks.invoke.mockResolvedValueOnce("[]");
+    await expect(loadAccounts()).resolves.toEqual([]);
   });
 });

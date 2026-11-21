@@ -17,13 +17,18 @@ export default function AppUpdateManager({ onToast }: AppUpdateManagerProps) {
   const {
     supported,
     availableUpdate,
+    route,
+    installPhase,
+    fallbackNotice,
     dialogOpen,
     checking,
     installing,
     restartReady,
     downloadProgress,
     error,
+    handleExpired,
     lastCheckResult,
+    recheckUpdates,
     openUpdateDialog,
     dismissUpdate,
     installUpdate,
@@ -40,7 +45,19 @@ export default function AppUpdateManager({ onToast }: AppUpdateManagerProps) {
     }
 
     if (installing) {
-      return "下载更新中...";
+      if (installPhase === "installing") {
+        return "校验安装中...";
+      }
+      if (downloadProgress?.totalBytes && downloadProgress.totalBytes > 0) {
+        const percent = Math.min(
+          100,
+          Math.round((downloadProgress.downloadedBytes / downloadProgress.totalBytes) * 100),
+        );
+        return installPhase === "retrying-official"
+          ? `官方源下载中 ${percent}%`
+          : `下载更新中 ${percent}%`;
+      }
+      return installPhase === "retrying-official" ? "官方源下载中..." : "下载更新中...";
     }
 
     if (checking) {
@@ -79,13 +96,21 @@ export default function AppUpdateManager({ onToast }: AppUpdateManagerProps) {
       {availableUpdate && (
         <UpdateDialog
           update={availableUpdate}
+          route={route}
+          installPhase={installPhase}
+          fallbackNotice={fallbackNotice}
           open={dialogOpen}
+          checking={checking}
           installing={installing}
           restartReady={restartReady}
+          handleExpired={handleExpired}
           downloadProgress={downloadProgress}
           error={error}
           onClose={dismissUpdate}
           onInstall={installUpdate}
+          onRecheck={() => {
+            void recheckUpdates();
+          }}
           onRestart={restartToApplyUpdate}
         />
       )}

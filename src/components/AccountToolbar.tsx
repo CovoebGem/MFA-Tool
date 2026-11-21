@@ -7,8 +7,10 @@ import type { CheckResult } from "./CheckResultDialog";
 
 export interface AccountToolbarProps {
   accounts: OTPAccount[];
+  allAccounts?: OTPAccount[];
   selectedIds: Set<string>;
   onDelete: (id: string) => void;
+  onBatchDelete?: (ids: string[]) => Promise<void> | void;
   onRefresh: () => Promise<void>;
   onToggleSelectAll: () => void;
   onClearSelection: () => void;
@@ -16,13 +18,21 @@ export interface AccountToolbarProps {
 
 export default function AccountToolbar({
   accounts,
+  allAccounts,
   selectedIds,
   onDelete,
+  onBatchDelete,
   onRefresh,
   onToggleSelectAll,
   onClearSelection,
 }: AccountToolbarProps) {
   const hasAccounts = accounts.length > 0;
+  const checkAccounts = allAccounts ?? accounts;
+  const allVisibleSelected = hasAccounts && accounts.every((account) => selectedIds.has(account.id));
+  const selectedVisibleCount = accounts.reduce(
+    (count, account) => (selectedIds.has(account.id) ? count + 1 : count),
+    0,
+  );
 
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
@@ -49,7 +59,7 @@ export default function AccountToolbar({
     setCheckSuccess(false);
     try {
       const invalidAccounts: CheckResult["invalidAccounts"] = [];
-      for (const account of accounts) {
+      for (const account of checkAccounts) {
         try {
           if (!isValidBase32(account.secret)) {
             invalidAccounts.push({ account, reason: "密钥不是有效的 Base32 编码" });
@@ -58,7 +68,7 @@ export default function AccountToolbar({
           invalidAccounts.push({ account, reason: "密钥校验失败" });
         }
       }
-      const duplicateGroups = findInternalDuplicates(accounts);
+      const duplicateGroups = findInternalDuplicates(checkAccounts);
       const result: CheckResult = { invalidAccounts, duplicateGroups };
       if (invalidAccounts.length > 0 || duplicateGroups.length > 0) {
         setCheckResult(result);
@@ -82,10 +92,16 @@ export default function AccountToolbar({
     if (!confirmed) return;
     setDeleting(true);
     try {
-      for (const id of selectedIds) {
-        onDelete(id);
+      if (onBatchDelete) {
+        await onBatchDelete(Array.from(selectedIds));
+      } else {
+        for (const id of selectedIds) {
+          onDelete(id);
+        }
       }
       onClearSelection();
+    } catch {
+      // 保存失败时保留选择状态，错误提示由上层状态管理
     } finally {
       setDeleting(false);
     }
@@ -106,9 +122,9 @@ export default function AccountToolbar({
   const iconBtnBase =
     "relative group p-2 rounded-md border transition-colors";
   const iconBtnNormal =
-    "text-slate-600 bg-white border-slate-300 hover:bg-slate-50 hover:text-slate-800";
+    "text-slate-600 bg-white border-slate-300 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white";
   const iconBtnDisabled =
-    "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed";
+    "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed dark:text-gray-500 dark:bg-gray-800/50 dark:border-gray-700";
 
   return (
     <>
@@ -146,7 +162,7 @@ export default function AccountToolbar({
             title="删除"
             onClick={handleDelete}
             disabled={deleting}
-            className={`${iconBtnBase} ${deleting ? iconBtnDisabled : "text-slate-600 bg-white border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300"}`}
+            className={`${iconBtnBase} ${deleting ? iconBtnDisabled : "text-slate-600 bg-white border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:text-slate-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:hover:border-red-500/40"}`}
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="3 6 5 6 21 6" />
@@ -191,22 +207,22 @@ export default function AccountToolbar({
           <button
             type="button"
             aria-label="全选"
-            title={selectedIds.size === accounts.length && accounts.length > 0 ? "取消全选" : "全选"}
+            title={allVisibleSelected ? "取消全选" : "全选"}
             onClick={onToggleSelectAll}
             className={`${iconBtnBase} ${
-              selectedIds.size === accounts.length && accounts.length > 0
-                ? "text-blue-700 bg-blue-50 border-blue-300 hover:bg-blue-100"
-                : selectedIds.size > 0
-                  ? "text-blue-600 bg-white border-blue-200 hover:bg-blue-50"
+              allVisibleSelected
+                ? "text-blue-700 bg-blue-50 border-blue-300 hover:bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40 dark:border-blue-500/40 dark:hover:bg-blue-900/60"
+                : selectedVisibleCount > 0
+                  ? "text-blue-600 bg-white border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:bg-gray-800 dark:border-blue-500/30 dark:hover:bg-blue-950/30"
                   : iconBtnNormal
             }`}
           >
-            {selectedIds.size === accounts.length && accounts.length > 0 ? (
+            {allVisibleSelected ? (
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
                 <path d="M9 12l2 2 4-4" />
               </svg>
-            ) : selectedIds.size > 0 ? (
+            ) : selectedVisibleCount > 0 ? (
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
                 <line x1="8" y1="12" x2="16" y2="12" />
@@ -217,7 +233,7 @@ export default function AccountToolbar({
               </svg>
             )}
             <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-              {selectedIds.size === accounts.length && accounts.length > 0 ? "取消全选" : "全选"}
+              {allVisibleSelected ? "取消全选" : "全选"}
             </span>
           </button>
         )}

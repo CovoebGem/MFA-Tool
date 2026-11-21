@@ -173,16 +173,16 @@ export function findOrCreateGroupByIssuer(
  * 如果没有数据，返回包含默认分组的数组
  */
 export async function loadGroups(): Promise<Group[]> {
-  try {
-    const json = await invoke<string>("read_groups");
-    const groups = (JSON.parse(json) as Group[]).map(normalizeUpdatedAt);
-    if (groups.length === 0) {
-      return [createDefaultGroup()];
-    }
-    return groups;
-  } catch {
+  const json = await invoke<string>("read_groups");
+  const parsed: unknown = JSON.parse(json);
+  if (!Array.isArray(parsed)) {
+    throw new Error("分组数据格式无效");
+  }
+  const groups = (parsed as Group[]).map(normalizeUpdatedAt);
+  if (groups.length === 0) {
     return [createDefaultGroup()];
   }
+  return groups;
 }
 
 /**

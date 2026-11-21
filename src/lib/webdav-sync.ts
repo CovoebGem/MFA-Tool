@@ -1,5 +1,5 @@
 import type { Group, OTPAccount } from "../types";
-import type { MergedBackupData } from "./backup";
+import { sanitizeAccountNumbers, type MergedBackupData } from "./backup";
 import { DEFAULT_GROUP_ID, createDefaultGroup, getDefaultGroup } from "./group-manager";
 
 function normalizeGroupName(name: string): string {
@@ -19,7 +19,8 @@ function normalizeGroup(group: Group): Group {
 }
 
 function normalizeAccount(account: OTPAccount): OTPAccount {
-  return account.updatedAt === undefined ? { ...account, updatedAt: account.createdAt } : account;
+  const sanitized = sanitizeAccountNumbers(account);
+  return sanitized.updatedAt === undefined ? { ...sanitized, updatedAt: sanitized.createdAt } : sanitized;
 }
 
 function ensureDefaultGroup(groups: Group[]): Group[] {

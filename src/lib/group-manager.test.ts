@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ValidationError } from '../types';
 import type { Group, OTPAccount } from '../types';
 import {
@@ -10,7 +10,16 @@ import {
   deleteGroup,
   filterByGroup,
   findOrCreateGroupByIssuer,
+  loadGroups,
 } from './group-manager';
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: mocks.invoke,
+}));
 
 // --- 辅助函数 ---
 
@@ -128,5 +137,28 @@ describe('getDefaultGroup - 无默认分组', () => {
     expect(result.id).toBe(DEFAULT_GROUP_ID);
     expect(result.isDefault).toBe(true);
     expect(result.name).toBe('默认');
+  });
+});
+
+describe('loadGroups - 读取与失败边界', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('当存储返回合法空数组 [] 时应补出默认分组', async () => {
+    mocks.invoke.mockResolvedValueOnce('[]');
+    const result = await loadGroups();
+    expect(result).toEqual([createDefaultGroup()]);
+  });
+
+  it('当 read_groups 拒绝或 JSON 非法/非数组时应直接抛出错误而不是吞掉异常', async () => {
+    mocks.invoke.mockRejectedValueOnce(new Error('disk read failed'));
+    await expect(loadGroups()).rejects.toThrow('disk read failed');
+
+    mocks.invoke.mockResolvedValueOnce('{broken-json');
+    await expect(loadGroups()).rejects.toThrow();
+
+    mocks.invoke.mockResolvedValueOnce(JSON.stringify({ invalid: true }));
+    await expect(loadGroups()).rejects.toThrow('分组数据格式无效');
   });
 });

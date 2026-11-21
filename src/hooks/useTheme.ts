@@ -26,6 +26,7 @@ export function useTheme() {
 
   useEffect(() => {
     if (theme !== "system") return;
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {

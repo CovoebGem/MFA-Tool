@@ -20,7 +20,7 @@ export default function SortControls({ config, onChange }: SortControlsProps) {
           onChange({ ...config, field: e.target.value as SortField })
         }
         aria-label="排序字段"
-        className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
       >
         {fieldOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -38,7 +38,7 @@ export default function SortControls({ config, onChange }: SortControlsProps) {
         }
         aria-label={config.direction === "asc" ? "升序，点击切换为降序" : "降序，点击切换为升序"}
         title={config.direction === "asc" ? "升序" : "降序"}
-        className="px-2 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+        className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 dark:text-gray-100 transition-colors"
       >
         {config.direction === "asc" ? "↑" : "↓"}
       </button>

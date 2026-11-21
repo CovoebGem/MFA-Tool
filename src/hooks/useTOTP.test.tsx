@@ -212,4 +212,61 @@ describe("useTOTP", () => {
     );
     expect(runtimeClock.syncRuntimeClock).toHaveBeenCalled();
   });
+
+  it("does not throw when given an invalid base32 secret", async () => {
+    runtimeClock.currentNow = Date.parse("2025-01-01T00:00:10.000Z");
+
+    render(<TOTPProbe secret="NOT!VALID@BASE32" />);
+    await flushRuntimeClockSync();
+
+    expect(screen.getByTestId("code")).toHaveTextContent("");
+    expect(screen.getByTestId("remaining")).toHaveTextContent("20");
+  });
+
+  it("handles invalid period/digits without throwing and renders empty code with safe countdown", async () => {
+    runtimeClock.currentNow = Date.parse("2025-01-01T00:00:10.000Z");
+
+    render(<TOTPProbe period={0} digits={0} />);
+    await flushRuntimeClockSync();
+    expect(screen.getByTestId("code")).toHaveTextContent("");
+    expect(screen.getByTestId("remaining")).toHaveTextContent("20");
+
+    cleanup();
+    const evilPeriod = { valueOf: null, toString: null } as unknown as number;
+    render(<TOTPProbe period={evilPeriod} digits={6} />);
+    await flushRuntimeClockSync();
+    expect(screen.getByTestId("code")).toHaveTextContent("");
+    expect(screen.getByTestId("remaining")).toHaveTextContent("20");
+
+    cleanup();
+    render(<TOTPProbe period={1e308} digits={6} />);
+    await flushRuntimeClockSync();
+    expect(screen.getByTestId("code")).toHaveTextContent("");
+    expect(screen.getByTestId("remaining")).toHaveTextContent("20");
+  });
+
+  it("continues initial sync and boundary countdown when syncRuntimeClock rejects", async () => {
+    const start = Date.parse("2025-01-01T00:00:29.900Z");
+    runtimeClock.currentNow = start;
+    runtimeClock.syncRuntimeClock.mockRejectedValueOnce(new Error("clock rpc failed"));
+
+    render(<TOTPProbe />);
+    await flushRuntimeClockSync();
+
+    expect(screen.getByTestId("code")).toHaveTextContent(
+      generateTOTP(SECRET, PERIOD, DIGITS, start),
+    );
+    expect(screen.getByTestId("remaining")).toHaveTextContent("1");
+
+    await act(async () => {
+      runtimeClock.currentNow = start + 100;
+      vi.advanceTimersByTime(100);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("code")).toHaveTextContent(
+      generateTOTP(SECRET, PERIOD, DIGITS, start + 100),
+    );
+    expect(screen.getByTestId("remaining")).toHaveTextContent("30");
+  });
 });

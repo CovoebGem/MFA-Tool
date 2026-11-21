@@ -1,5 +1,6 @@
 import type { Page } from "../types";
 import type { ReactNode } from "react";
+import type { Theme } from "../lib/theme-store";
 import ThemeToggle from "./ThemeToggle";
 import LocaleToggle from "./LocaleToggle";
 import { useI18n } from "../contexts/I18nContext";
@@ -10,6 +11,8 @@ interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   viewportHeight?: string;
+  theme?: Theme;
+  onThemeChange?: (theme: Theme) => void;
 }
 
 function HomeIcon({ className }: { className?: string }) {
@@ -158,6 +161,8 @@ export default function Sidebar({
   collapsed,
   onToggleCollapse,
   viewportHeight = "100vh",
+  theme,
+  onThemeChange,
 }: SidebarProps) {
   const { t } = useI18n();
 
@@ -171,7 +176,7 @@ export default function Sidebar({
 
   return (
     <nav
-      className={`fixed left-0 top-0 flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 transition-all duration-200 ${
+      className={`fixed left-0 top-0 flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 transition-[width] duration-200 ease-out ${
         collapsed ? "w-16 items-center" : "w-48"
       }`}
       style={{ height: viewportHeight }}
@@ -207,7 +212,7 @@ export default function Sidebar({
       <div className={`mt-auto ${collapsed ? "flex flex-col items-center gap-2" : "px-3 space-y-2"}`}>
         {!collapsed && (
           <div className="flex w-full flex-col gap-2">
-            <ThemeToggle />
+            <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
             <LocaleToggle />
           </div>
         )}
