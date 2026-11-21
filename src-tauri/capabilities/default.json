@@ -13,7 +13,6 @@
     "fs:default",
     "fs:allow-write-text-file",
     "fs:allow-read-text-file",
-    "process:default",
-    "updater:default"
+    "process:default"
   ]
 }

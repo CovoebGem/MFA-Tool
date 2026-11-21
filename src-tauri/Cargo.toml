@@ -1,6 +1,6 @@
 [package]
 name = "mfa-tool"
-version = "0.3.8"
+version = "0.3.9"
 description = "MFA Tool desktop authenticator built with Tauri"
 authors = ["CovoebGem"]
 license = "MIT"
@@ -27,3 +27,14 @@ tauri-plugin-updater = "2.10.0"
 tauri-plugin-process = "2.3.1"
 keyring = "3"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest_updater = { package = "reqwest", version = "0.13", default-features = false, features = ["stream"] }
+url = "2"
+base64 = "0.22"
+futures-util = "0.3"
+minisign-verify = "0.2"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+semver = "1"
+tokio = { version = "1", features = ["net", "io-util"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "net", "io-util"] }

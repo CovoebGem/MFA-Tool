@@ -40,3 +40,16 @@ export function useI18n() {
   }
   return context;
 }
+
+export function useOptionalI18n(): I18nContextType {
+  const context = useContext(I18nContext);
+  if (context) {
+    return context;
+  }
+
+  return {
+    locale: "zh",
+    setLocale: () => {},
+    t: (key: string, params?: Record<string, string | number>) => t("zh", key, params),
+  };
+}

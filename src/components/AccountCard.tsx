@@ -47,7 +47,10 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
     }
   }, []);
 
-  const handleCopyCode = () => copyToClipboard(code, "code");
+  const handleCopyCode = () => {
+    if (!code) return;
+    copyToClipboard(code, "code");
+  };
   const handleCopySecret = () => copyToClipboard(account.secret, "secret");
   const handleCopyUrl = () => copyToClipboard(buildOtpauthUrl(account), "url");
 
@@ -64,11 +67,15 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
     onDelete(account.id);
   };
 
-  const formattedCode = code.length === 6
-    ? `${code.slice(0, 3)} ${code.slice(3)}`
-    : code;
+  const formattedCode = !code
+    ? "验证码不可用"
+    : code.length === 6
+      ? `${code.slice(0, 3)} ${code.slice(3)}`
+      : code;
 
-  const progress = (remaining / account.period) * 100;
+  const safePeriod =
+    Number.isInteger(account.period) && account.period > 0 ? account.period : 30;
+  const progress = (remaining / safePeriod) * 100;
   const iconUrl = getServiceIconUrl(account.issuer);
   const fallbackIcon = getFallbackIcon(account.issuer || "?");
 
@@ -111,9 +118,11 @@ export default function AccountCard({ account, onDelete, onUpdate, groupName, se
       </div>
 
       {/* 验证码区域 */}
-      <button type="button" onClick={handleCopyCode} aria-label={`复制验证码 ${code}`}
-        className="w-full flex items-center justify-between px-4 py-3 mb-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer group">
-        <span className="text-2xl font-mono font-bold tracking-widest text-gray-900 dark:text-gray-100">{formattedCode}</span>
+      <button type="button" onClick={handleCopyCode} disabled={!code} aria-label={code ? `复制验证码 ${code}` : "验证码不可用"}
+        className={`w-full flex items-center justify-between px-4 py-3 mb-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 transition-colors ${
+          code ? "hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer group" : "opacity-60 cursor-not-allowed"
+        }`}>
+        <span className={code ? "text-2xl font-mono font-bold tracking-widest text-gray-900 dark:text-gray-100" : "text-sm font-medium text-red-500 dark:text-red-400"}>{formattedCode}</span>
         <div className="flex items-center gap-2">
           <div className="relative w-8 h-8" aria-label={`剩余 ${remaining} 秒`}>
             <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32" aria-hidden="true">

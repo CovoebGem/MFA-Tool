@@ -67,9 +67,18 @@ const themeOptions: { value: Theme; label: string; icon: typeof SunIcon }[] = [
   { value: "system", label: "跟随系统", icon: ComputerIcon },
 ];
 
-export default function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+interface ThemeToggleProps {
+  theme?: Theme;
+  onThemeChange?: (theme: Theme) => void;
+}
 
+function ThemeToggleView({
+  theme,
+  setTheme,
+}: {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+}) {
   return (
     <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
       {themeOptions.map(({ value, label, icon: Icon }) => (
@@ -90,4 +99,17 @@ export default function ThemeToggle() {
       ))}
     </div>
   );
+}
+
+function UncontrolledThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  return <ThemeToggleView theme={theme} setTheme={setTheme} />;
+}
+
+export default function ThemeToggle({ theme: controlledTheme, onThemeChange }: ThemeToggleProps = {}) {
+  if (controlledTheme !== undefined && onThemeChange !== undefined) {
+    return <ThemeToggleView theme={controlledTheme} setTheme={onThemeChange} />;
+  }
+
+  return <UncontrolledThemeToggle />;
 }

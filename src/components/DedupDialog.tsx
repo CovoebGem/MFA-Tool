@@ -2,6 +2,8 @@ import type { DedupResult } from "../types";
 
 interface DedupDialogProps {
   result: DedupResult;
+  submitting?: boolean;
+  error?: string | null;
   onSkip: () => void;
   onOverride: () => void;
   onCancel: () => void;
@@ -13,6 +15,8 @@ function matchTypeLabel(matchType: "secret" | "name_issuer"): string {
 
 export default function DedupDialog({
   result,
+  submitting = false,
+  error = null,
   onSkip,
   onOverride,
   onCancel,
@@ -71,24 +75,39 @@ export default function DedupDialog({
           </ul>
         )}
 
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
+
         <div className="flex justify-end gap-2">
           <button
+            type="button"
+            disabled={submitting}
             onClick={onCancel}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             取消
           </button>
           <button
+            type="button"
+            disabled={submitting}
             onClick={onSkip}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            跳过重复项
+            {submitting ? "处理中..." : "跳过重复项"}
           </button>
           <button
+            type="button"
+            disabled={submitting}
             onClick={onOverride}
-            className="rounded-lg bg-orange-600 px-4 py-2 text-sm text-white hover:bg-orange-700"
+            className="rounded-lg bg-orange-600 px-4 py-2 text-sm text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            覆盖重复项
+            {submitting ? "处理中..." : "覆盖重复项"}
           </button>
         </div>
       </div>

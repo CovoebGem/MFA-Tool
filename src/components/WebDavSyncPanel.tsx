@@ -33,7 +33,12 @@ type ConnectionState = "idle" | "connected" | "failed";
 interface WebDavSyncPanelProps {
   accounts: OTPAccount[];
   groups: Group[];
-  onApplyData: (accounts: OTPAccount[], groups: Group[]) => Promise<void>;
+  onApplyData?: (accounts: OTPAccount[], groups: Group[]) => Promise<void>;
+  onMergeRemoteData?: (
+    remoteAccounts: OTPAccount[],
+    remoteGroups: Group[],
+  ) => Promise<{ accounts: OTPAccount[]; groups: Group[] }>;
+  onGetLatestSnapshot?: () => Promise<{ accounts: OTPAccount[]; groups: Group[] }>;
   onToast: (message: string, type: "success" | "error") => void;
 }
 
@@ -132,6 +137,8 @@ export default function WebDavSyncPanel({
   accounts,
   groups,
   onApplyData,
+  onMergeRemoteData,
+  onGetLatestSnapshot,
   onToast,
 }: WebDavSyncPanelProps) {
   const [draft, setDraft] = useState<WebDavConfig>(() => loadWebDavConfig());
@@ -256,15 +263,20 @@ export default function WebDavSyncPanel({
       }
 
       const remoteData = parseBackupJSON(remoteJson);
-      const merged = mergeWebDavSyncData(accounts, groups, remoteData.accounts, remoteData.groups);
-      await onApplyData(merged.accounts, merged.groups);
+      if (onMergeRemoteData) {
+        await onMergeRemoteData(remoteData.accounts, remoteData.groups);
+      } else if (onApplyData) {
+        const merged = mergeWebDavSyncData(accounts, groups, remoteData.accounts, remoteData.groups);
+        await onApplyData(merged.accounts, merged.groups);
+      }
       onToast("已从云端拉取并合并数据", "success");
     });
   };
 
   const handlePushToCloud = async () => {
     await runSyncAction("pushing", async ({ fileUrl, username, password: nextPassword }) => {
-      const json = await exportToJSON(accounts, groups);
+      const snapshot = onGetLatestSnapshot ? await onGetLatestSnapshot() : { accounts, groups };
+      const json = await exportToJSON(snapshot.accounts, snapshot.groups);
       await writeWebDavSync(fileUrl, username, json, nextPassword);
       onToast("已把当前本地数据上传到云端", "success");
     });
@@ -273,18 +285,21 @@ export default function WebDavSyncPanel({
   const handleSyncNow = async () => {
     await runSyncAction("syncing", async ({ fileUrl, username, password: nextPassword }) => {
       const remoteJson = await readWebDavSync(fileUrl, username, nextPassword);
-      const merged = remoteJson
-        ? (() => {
-            const remoteData = parseBackupJSON(remoteJson);
-            return mergeWebDavSyncData(accounts, groups, remoteData.accounts, remoteData.groups);
-          })()
-        : { accounts, groups };
+      let committed: { accounts: OTPAccount[]; groups: Group[] };
 
       if (remoteJson) {
-        await onApplyData(merged.accounts, merged.groups);
+        const remoteData = parseBackupJSON(remoteJson);
+        if (onMergeRemoteData) {
+          committed = await onMergeRemoteData(remoteData.accounts, remoteData.groups);
+        } else {
+          committed = mergeWebDavSyncData(accounts, groups, remoteData.accounts, remoteData.groups);
+          await onApplyData?.(committed.accounts, committed.groups);
+        }
+      } else {
+        committed = onGetLatestSnapshot ? await onGetLatestSnapshot() : { accounts, groups };
       }
 
-      const uploadJson = await exportToJSON(merged.accounts, merged.groups);
+      const uploadJson = await exportToJSON(committed.accounts, committed.groups);
       await writeWebDavSync(fileUrl, username, uploadJson, nextPassword);
       onToast(remoteJson ? "已完成一次双向同步" : "已创建首个云端同步文件", "success");
     });

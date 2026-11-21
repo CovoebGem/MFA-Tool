@@ -4,9 +4,9 @@ import type { Group, OTPAccount } from "../types";
 interface GroupManagerPanelProps {
   groups: Group[];
   accounts: OTPAccount[];
-  onCreateGroup: (name: string) => void;
-  onRenameGroup: (groupId: string, newName: string) => void;
-  onDeleteGroup: (groupId: string) => void;
+  onCreateGroup: (name: string) => Promise<void> | void;
+  onRenameGroup: (groupId: string, newName: string) => Promise<void> | void;
+  onDeleteGroup: (groupId: string) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -31,11 +31,11 @@ export default function GroupManagerPanel({
   const getAccountCount = (groupId: string) =>
     accounts.filter((a) => a.groupId === groupId).length;
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const trimmed = newGroupName.trim();
     if (!trimmed) { setError("分组名称不能为空"); return; }
     try {
-      onCreateGroup(trimmed);
+      await onCreateGroup(trimmed);
       setNewGroupName("");
       setError(null);
     } catch (e) {
@@ -50,12 +50,12 @@ export default function GroupManagerPanel({
     setConfirmDeleteId(null);
   };
 
-  const handleRename = () => {
+  const handleRename = async () => {
     if (!editingId) return;
     const trimmed = editName.trim();
     if (!trimmed) { setError("分组名称不能为空"); return; }
     try {
-      onRenameGroup(editingId, trimmed);
+      await onRenameGroup(editingId, trimmed);
       setEditingId(null);
       setEditName("");
       setError(null);
@@ -64,9 +64,13 @@ export default function GroupManagerPanel({
     }
   };
 
-  const handleDelete = (groupId: string) => {
+  const handleDelete = async (groupId: string) => {
     if (confirmDeleteId === groupId) {
-      onDeleteGroup(groupId);
+      try {
+        await onDeleteGroup(groupId);
+      } catch (e) {
+        if (e instanceof Error) setError(e.message);
+      }
       setConfirmDeleteId(null);
     } else {
       setConfirmDeleteId(groupId);
@@ -74,7 +78,13 @@ export default function GroupManagerPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-20"
+      role="dialog"
+      aria-modal="true"
+      aria-label="分组管理"
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/20" />
       <div
         className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4"

@@ -13,7 +13,7 @@ interface BackupPanelProps {
   accounts: OTPAccount[];
   groups: Group[];
   selectedAccountIds?: Set<string>;
-  onImport: (accounts: OTPAccount[], groups: Group[]) => void;
+  onImport: (accounts: OTPAccount[], groups: Group[]) => Promise<void> | void;
   onToast: (message: string, type: "success" | "error") => void;
 }
 
@@ -108,7 +108,7 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
     try {
       const text = await readTextFile(filePath);
       const data = parseBackupJSON(text);
-      onImport(data.accounts, data.groups);
+      await onImport(data.accounts, data.groups);
       onToast("成功导入备份，已合并现有数据", "success");
     } catch (err) {
       const message = err instanceof Error ? err.message : "导入失败";
@@ -126,7 +126,7 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
     try {
       const text = await file.text();
       const data = parseBackupJSON(text);
-      onImport(data.accounts, data.groups);
+      await onImport(data.accounts, data.groups);
       onToast("成功导入备份，已合并现有数据", "success");
     } catch (err) {
       const message = err instanceof Error ? err.message : "导入失败";

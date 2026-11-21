@@ -1,4 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { useTOTP } from "../hooks/useTOTP";
 import { isValidBase32 } from "../lib/validators";
 import { DEFAULT_GROUP_ID } from "../lib/group-manager";
@@ -9,19 +16,30 @@ export interface TempEntry {
   secret: string;
 }
 
+const inFlightTempEntryIds = new Set<string>();
+const tempSaveListeners = new Set<(errorMessage?: string) => void>();
+
+function notifyTempSaveChange(errorMessage?: string) {
+  for (const listener of tempSaveListeners) {
+    listener(errorMessage);
+  }
+}
+
 interface TempPanelProps {
   entries: TempEntry[];
-  onEntriesChange: (entries: TempEntry[]) => void;
-  onSaveToAccount: (account: OTPAccount) => void;
+  onEntriesChange: Dispatch<SetStateAction<TempEntry[]>>;
+  onSaveToAccount: (account: OTPAccount) => Promise<void> | void;
 }
 
 /** 单个临时密钥条目 */
 function TempEntryItem({
   entry,
+  saving,
   onSave,
   onRemove,
 }: {
   entry: TempEntry;
+  saving: boolean;
   onSave: (entry: TempEntry) => void;
   onRemove: (id: string) => void;
 }) {
@@ -34,6 +52,7 @@ function TempEntryItem({
   }, []);
 
   const handleCopyCode = useCallback(async () => {
+    if (!code) return;
     try {
       await navigator.clipboard.writeText(code);
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -43,7 +62,11 @@ function TempEntryItem({
   }, [code]);
 
   // 格式化验证码
-  const formattedCode = code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
+  const formattedCode = !code
+    ? "验证码不可用"
+    : code.length === 6
+      ? `${code.slice(0, 3)} ${code.slice(3)}`
+      : code;
 
   return (
     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -52,10 +75,11 @@ function TempEntryItem({
         <button
           type="button"
           onClick={handleCopyCode}
-          className="flex items-center gap-3 mt-1 group cursor-pointer"
-          aria-label={`复制验证码 ${code}`}
+          disabled={!code}
+          className={`flex items-center gap-3 mt-1 ${code ? "group cursor-pointer" : "opacity-60 cursor-not-allowed"}`}
+          aria-label={code ? `复制验证码 ${code}` : "验证码不可用"}
         >
-          <span className="text-2xl font-mono font-bold tracking-widest text-gray-900 group-hover:text-blue-600 transition-colors">
+          <span className={code ? "text-2xl font-mono font-bold tracking-widest text-gray-900 group-hover:text-blue-600 transition-colors" : "text-sm font-medium text-red-500"}>
             {formattedCode}
           </span>
           <span className="text-sm text-gray-400">{remaining}s</span>
@@ -70,14 +94,18 @@ function TempEntryItem({
       </div>
       <div className="flex gap-2 ml-3 shrink-0">
         <button
-          onClick={() => onSave(entry)}
-          className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          type="button"
+          onClick={() => void onSave(entry)}
+          disabled={saving}
+          className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          保存到账户
+          {saving ? "保存中..." : "保存到账户"}
         </button>
         <button
+          type="button"
           onClick={() => onRemove(entry.id)}
-          className="px-3 py-1.5 text-sm bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-colors"
+          disabled={saving}
+          className="px-3 py-1.5 text-sm bg-gray-200 text-gray-600 rounded hover:bg-gray-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
           移除
         </button>
@@ -89,15 +117,30 @@ function TempEntryItem({
 export function TempPanel({ entries, onEntriesChange, onSaveToAccount }: TempPanelProps) {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
+  const [savingIds, setSavingIds] = useState<Set<string>>(() => new Set(inFlightTempEntryIds));
+
+  useEffect(() => {
+    const syncSavingState = (errorMessage?: string) => {
+      setSavingIds(new Set(inFlightTempEntryIds));
+      if (errorMessage) {
+        setError(errorMessage);
+      }
+    };
+    tempSaveListeners.add(syncSavingState);
+    setSavingIds(new Set(inFlightTempEntryIds));
+    return () => {
+      tempSaveListeners.delete(syncSavingState);
+    };
+  }, []);
 
   const handleAdd = () => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
-    if (!isValidBase32(trimmed)) {
+    const normalized = input.replace(/\s+/g, "").toUpperCase();
+    if (!normalized) return;
+    if (!isValidBase32(normalized)) {
       setError("密钥格式无效，请输入有效的 base32 编码密钥");
       return;
     }
-    onEntriesChange([...entries, { id: crypto.randomUUID(), secret: trimmed.toUpperCase() }]);
+    onEntriesChange((prev) => [...prev, { id: crypto.randomUUID(), secret: normalized }]);
     setInput("");
     setError("");
   };
@@ -106,7 +149,11 @@ export function TempPanel({ entries, onEntriesChange, onSaveToAccount }: TempPan
     if (e.key === "Enter") handleAdd();
   };
 
-  const handleSave = (entry: TempEntry) => {
+  const handleSave = async (entry: TempEntry) => {
+    if (inFlightTempEntryIds.has(entry.id)) {
+      return;
+    }
+
     const now = Date.now();
     const account: OTPAccount = {
       id: crypto.randomUUID(),
@@ -122,12 +169,28 @@ export function TempPanel({ entries, onEntriesChange, onSaveToAccount }: TempPan
       updatedAt: now,
       groupId: DEFAULT_GROUP_ID,
     };
-    onSaveToAccount(account);
-    onEntriesChange(entries.filter((e) => e.id !== entry.id));
+
+    inFlightTempEntryIds.add(entry.id);
+    setError("");
+    notifyTempSaveChange();
+
+    let saveErrorMessage: string | undefined;
+    try {
+      await onSaveToAccount(account);
+      onEntriesChange((prev) => prev.filter((item) => item.id !== entry.id));
+    } catch (err) {
+      saveErrorMessage = err instanceof Error ? err.message : "保存到账户失败，请重试";
+    } finally {
+      inFlightTempEntryIds.delete(entry.id);
+      notifyTempSaveChange(saveErrorMessage);
+    }
   };
 
   const handleRemove = (id: string) => {
-    onEntriesChange(entries.filter((e) => e.id !== id));
+    if (inFlightTempEntryIds.has(id)) {
+      return;
+    }
+    onEntriesChange((prev) => prev.filter((item) => item.id !== id));
   };
 
   return (
@@ -154,14 +217,20 @@ export function TempPanel({ entries, onEntriesChange, onSaveToAccount }: TempPan
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-500" role="alert">{error}</p>}
 
       {entries.length === 0 ? (
         <p className="text-center text-gray-400 py-8">暂无临时密钥</p>
       ) : (
         <div className="space-y-3">
           {entries.map((entry) => (
-            <TempEntryItem key={entry.id} entry={entry} onSave={handleSave} onRemove={handleRemove} />
+            <TempEntryItem
+              key={entry.id}
+              entry={entry}
+              saving={savingIds.has(entry.id)}
+              onSave={handleSave}
+              onRemove={handleRemove}
+            />
           ))}
         </div>
       )}

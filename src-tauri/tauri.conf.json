@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "MFA Tool",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "identifier": "com.mfa-tool.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -37,8 +37,10 @@
   },
   "plugins": {
     "updater": {
+      "dangerousInsecureTransportProtocol": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFCM0ZEQzc1QzlBRTJGQjYKUldTMkw2N0pkZHcvRzM3TFBTS2tsNXdvTTlNenpKZngxOGljOVY5RkMrYVZ2d203cnZuMWRLL3UK",
       "endpoints": [
+        "https://github.cbcsec.cc/CovoebGem/MFA-Tool/releases/latest/download/latest.json",
         "https://github.com/CovoebGem/MFA-Tool/releases/latest/download/latest.json"
       ],
       "windows": {

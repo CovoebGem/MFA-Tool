@@ -176,4 +176,24 @@ describe("GroupPage", () => {
       expect(onDeleteGroup).toHaveBeenCalledWith("g2");
     });
   });
+
+  describe("分组内搜索与跨组引导", () => {
+    it("支持在当前分组内过滤账户并在无结果时提供前往全部账户查看引导", () => {
+      const onSearchInAllAccounts = vi.fn();
+      render(<GroupPage {...defaultProps} onSearchInAllAccounts={onSearchInAllAccounts} />);
+
+      const searchInput = screen.getByRole("searchbox", { name: "搜索账户" });
+      fireEvent.change(searchInput, { target: { value: "GitHub" } });
+      expect(screen.getByText("GitHub")).toBeInTheDocument();
+      expect(screen.queryByText("Google")).not.toBeInTheDocument();
+
+      // 搜索其他分组中才有的 AWS
+      fireEvent.change(searchInput, { target: { value: "AWS" } });
+      expect(screen.getByText("未找到匹配「AWS」的账户")).toBeInTheDocument();
+
+      const jumpButton = screen.getByRole("button", { name: "在全部账户中查看 1 个结果" });
+      fireEvent.click(jumpButton);
+      expect(onSearchInAllAccounts).toHaveBeenCalledWith("AWS");
+    });
+  });
 });

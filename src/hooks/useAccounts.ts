@@ -1,18 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { OTPAccount, DedupResult } from "../types";
 import {
   loadAccounts,
   saveAccounts,
   addAccounts,
   removeAccount,
+  removeAccounts,
   updateAccount,
   moveAccountToGroup,
   moveAccountsToGroup,
 } from "../lib/account-manager";
+import { sanitizeAccountNumbers } from "../lib/backup";
 import { checkDuplicates } from "../lib/dedup-checker";
 import { DEFAULT_GROUP_ID } from "../lib/group-manager";
 
-function normalizeLoadedAccounts(data: OTPAccount[]) {
+export function normalizeLoadedAccounts(data: OTPAccount[]) {
   let needsMigration = false;
 
   const accounts = data.map((account) => {
@@ -28,6 +30,12 @@ function normalizeLoadedAccounts(data: OTPAccount[]) {
       nextAccount = { ...nextAccount, updatedAt: nextAccount.createdAt };
     }
 
+    const sanitized = sanitizeAccountNumbers(nextAccount);
+    if (sanitized !== nextAccount) {
+      needsMigration = true;
+      nextAccount = sanitized;
+    }
+
     return nextAccount;
   });
 
@@ -35,25 +43,93 @@ function normalizeLoadedAccounts(data: OTPAccount[]) {
 }
 
 export function useAccounts() {
-  const [accounts, setAccounts] = useState<OTPAccount[]>([]);
+  const [accounts, setAccountsState] = useState<OTPAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const accountsRef = useRef<OTPAccount[]>([]);
+  const loadedRef = useRef(false);
+  const writeQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const setAccountsSnapshot = useCallback((nextAccounts: OTPAccount[]) => {
+    accountsRef.current = nextAccounts;
+    loadedRef.current = true;
+    setAccountsState(nextAccounts);
+  }, []);
+
+  const getLatestAccounts = useCallback(() => accountsRef.current, []);
+  const isAccountsLoaded = useCallback(() => loadedRef.current, []);
+  const invalidateAccountsLoaded = useCallback(() => {
+    loadedRef.current = false;
+  }, []);
+
+  const runSerializedAccountWrite = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
+    const run = writeQueueRef.current.then(task, task);
+    writeQueueRef.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }, []);
+
+  const commitAccounts = useCallback(
+    async (
+      computeNext: (current: OTPAccount[]) => OTPAccount[] | null,
+      fallbackErrorMessage = "保存账户失败",
+      options: { rethrow?: boolean } = {},
+    ): Promise<boolean> => {
+      try {
+        return await runSerializedAccountWrite(async () => {
+          if (!loadedRef.current) {
+            throw new Error("账户库尚未加载成功，已阻止覆盖写入，请先重试刷新");
+          }
+          setError(null);
+          const updated = computeNext(accountsRef.current);
+          if (updated === null) {
+            return false;
+          }
+          await saveAccounts(updated);
+          accountsRef.current = updated;
+          setAccountsState(updated);
+          return true;
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : fallbackErrorMessage);
+        if (options.rethrow) {
+          throw err;
+        }
+        return false;
+      }
+    },
+    [runSerializedAccountWrite],
+  );
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const data = await loadAccounts();
-        if (!cancelled) {
+        await runSerializedAccountWrite(async () => {
+          const data = await loadAccounts();
+          if (cancelled) {
+            return;
+          }
+
           const { accounts: migrated, needsMigration } = normalizeLoadedAccounts(data);
 
-          setAccounts(migrated);
+          // 读取成功即锁定内存基准快照，即使后续迁移写回失败也不会退回空库覆盖原数据
+          accountsRef.current = migrated;
+          loadedRef.current = true;
+          setAccountsState(migrated);
 
-          // 如果有迁移，立即持久化
           if (needsMigration) {
-            await saveAccounts(migrated);
+            try {
+              await saveAccounts(migrated);
+            } catch (saveErr) {
+              if (!cancelled) {
+                setError(saveErr instanceof Error ? saveErr.message : "迁移保存账户失败");
+              }
+            }
           }
-        }
+        });
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "加载账户失败");
@@ -67,62 +143,62 @@ export function useAccounts() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [runSerializedAccountWrite]);
 
   const addNewAccounts = useCallback(
     async (newAccounts: OTPAccount[]) => {
-      try {
-        setError(null);
-        const updated = addAccounts(accounts, newAccounts);
-        setAccounts(updated);
-        await saveAccounts(updated);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "添加账户失败");
-      }
+      await commitAccounts(
+        (current) => addAccounts(current, newAccounts.map(sanitizeAccountNumbers)),
+        "添加账户失败",
+        { rethrow: true },
+      );
     },
-    [accounts],
+    [commitAccounts],
   );
 
   const deleteAccount = useCallback(
     async (id: string) => {
-      try {
-        setError(null);
-        const updated = removeAccount(accounts, id);
-        setAccounts(updated);
-        await saveAccounts(updated);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "删除账户失败");
-      }
+      await commitAccounts(
+        (current) => removeAccount(current, id),
+        "删除账户失败",
+      );
     },
-    [accounts],
+    [commitAccounts],
+  );
+
+  const batchDeleteAccounts = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0) {
+        return;
+      }
+      await commitAccounts(
+        (current) => removeAccounts(current, ids),
+        "批量删除账户失败",
+        { rethrow: true },
+      );
+    },
+    [commitAccounts],
   );
 
   const moveToGroup = useCallback(
     async (accountId: string, groupId: string) => {
-      try {
-        setError(null);
-        const updated = moveAccountToGroup(accounts, accountId, groupId);
-        setAccounts(updated);
-        await saveAccounts(updated);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "移动账户失败");
-      }
+      await commitAccounts(
+        (current) => moveAccountToGroup(current, accountId, groupId),
+        "移动账户失败",
+      );
     },
-    [accounts],
+    [commitAccounts],
   );
 
   const batchMoveToGroup = useCallback(
     async (accountIds: string[], groupId: string) => {
-      try {
-        setError(null);
-        const updated = moveAccountsToGroup(accounts, accountIds, groupId);
-        setAccounts(updated);
-        await saveAccounts(updated);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "批量移动账户失败");
-      }
+      await commitAccounts(
+        (current) => moveAccountsToGroup(current, accountIds, groupId),
+        "批量移动账户失败",
+        { rethrow: true },
+      );
     },
-    [accounts],
+    [commitAccounts],
   );
 
   const detectDuplicates = useCallback(
@@ -134,40 +210,57 @@ export function useAccounts() {
 
   const refreshAccounts = useCallback(async () => {
     try {
-      setError(null);
-      const data = await loadAccounts();
-      const { accounts: migrated, needsMigration } = normalizeLoadedAccounts(data);
-      setAccounts(migrated);
-      if (needsMigration) {
-        await saveAccounts(migrated);
-      }
+      await runSerializedAccountWrite(async () => {
+        setError(null);
+        let migrated: OTPAccount[];
+        let needsMigration: boolean;
+        try {
+          const data = await loadAccounts();
+          ({ accounts: migrated, needsMigration } = normalizeLoadedAccounts(data));
+        } catch (readErr) {
+          loadedRef.current = false;
+          throw readErr;
+        }
+        accountsRef.current = migrated;
+        loadedRef.current = true;
+        setAccountsState(migrated);
+        if (needsMigration) {
+          try {
+            await saveAccounts(migrated);
+          } catch (saveErr) {
+            setError(saveErr instanceof Error ? saveErr.message : "迁移保存账户失败");
+          }
+        }
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "刷新账户失败");
       throw err;
     }
-  }, []);
+  }, [runSerializedAccountWrite]);
 
   const editAccount = useCallback(
     async (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>) => {
-      try {
-        setError(null);
-        const updated = updateAccount(accounts, id, updates);
-        setAccounts(updated);
-        await saveAccounts(updated);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "编辑账户失败");
-      }
+      await commitAccounts(
+        (current) => updateAccount(current, id, updates),
+        "编辑账户失败",
+      );
     },
-    [accounts],
+    [commitAccounts],
   );
 
   return {
     accounts,
-    setAccounts,
+    setAccounts: setAccountsSnapshot,
+    getLatestAccounts,
+    isAccountsLoaded,
+    invalidateAccountsLoaded,
+    commitAccounts,
+    runSerializedAccountWrite,
     loading,
     error,
     addNewAccounts,
     deleteAccount,
+    batchDeleteAccounts,
     editAccount,
     moveToGroup,
     batchMoveToGroup,

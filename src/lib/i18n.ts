@@ -24,6 +24,11 @@ export const translations = {
       empty: "暂无账户",
       emptyHint: "请上传二维码或手动添加",
       search: "搜索账户...",
+      searchAriaLabel: "搜索账户",
+      searchPlaceholder: "搜索服务商、账户名称或分组...",
+      clearSearch: "清空搜索",
+      noMatch: "未找到匹配「{query}」的账户",
+      dragDisabledHint: "清空搜索后可调整顺序",
       sort: {
         name: "名称",
         issuer: "服务",
@@ -106,6 +111,11 @@ export const translations = {
       empty: "No accounts",
       emptyHint: "Upload a QR code or add manually",
       search: "Search accounts...",
+      searchAriaLabel: "Search accounts",
+      searchPlaceholder: "Search issuer, account name, or group...",
+      clearSearch: "Clear search",
+      noMatch: "No accounts matching \"{query}\"",
+      dragDisabledHint: "Clear search to reorder accounts",
       sort: {
         name: "Name",
         issuer: "Service",

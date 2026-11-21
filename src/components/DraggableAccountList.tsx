@@ -1,14 +1,27 @@
 import { useState, useCallback } from "react";
 import DraggableAccountCard from "./DraggableAccountCard";
-import type { OTPAccount } from "../types";
+import type { Group, OTPAccount } from "../types";
 
 interface DraggableAccountListProps {
   accounts: OTPAccount[];
+  groups?: Group[];
   onDelete: (id: string) => void;
+  onUpdate?: (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>) => void;
   onReorder: (accounts: OTPAccount[]) => void;
 }
 
-export default function DraggableAccountList({ accounts, onDelete, onReorder }: DraggableAccountListProps) {
+function getGroupName(groups: Group[], groupId: string): string {
+  const group = groups.find((g) => g.id === groupId);
+  return group ? group.name : "未知分组";
+}
+
+export default function DraggableAccountList({
+  accounts,
+  groups,
+  onDelete,
+  onUpdate,
+  onReorder,
+}: DraggableAccountListProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
 
@@ -70,6 +83,8 @@ export default function DraggableAccountList({ accounts, onDelete, onReorder }: 
           account={account}
           index={index}
           onDelete={onDelete}
+          onUpdate={onUpdate}
+          groupName={groups ? getGroupName(groups, account.groupId) : undefined}
           isDragging={dragIndex === index}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
