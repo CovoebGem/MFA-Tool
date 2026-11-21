@@ -202,8 +202,13 @@ export function mergeBackupData(
   };
 }
 
-export function downloadFile(content: string, filename: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType });
+export function downloadFile(
+  content: string | Uint8Array,
+  filename: string,
+  mimeType: string,
+): void {
+  const part: BlobPart = typeof content === "string" ? content : new Uint8Array(content);
+  const blob = new Blob([part], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
