@@ -106,4 +106,51 @@ describe("AccountDetailModal", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("renders, saves, and clears optional remark field", () => {
+    const onUpdate = vi.fn();
+    const onClose = vi.fn();
+
+    const { rerender } = render(
+      <AccountDetailModal
+        account={{ ...baseAccount, remark: "公司主号" }}
+        mode="detail"
+        onClose={onClose}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    expect(screen.getByText("公司主号")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑" }));
+    const remarkInput = screen.getByLabelText(/备注/) as HTMLInputElement;
+    expect(remarkInput.value).toBe("公司主号");
+
+    fireEvent.change(remarkInput, { target: { value: "  生产备用  " } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(onUpdate).toHaveBeenCalledWith("acc-1", {
+      name: "alice@example.com",
+      issuer: "GitHub",
+      secret: "JBSWY3DPEHPK3PXP",
+      remark: "生产备用",
+    });
+
+    onUpdate.mockClear();
+    rerender(
+      <AccountDetailModal
+        account={{ ...baseAccount, remark: "生产备用" }}
+        mode="edit"
+        onClose={onClose}
+        onUpdate={onUpdate}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/备注/), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(onUpdate).toHaveBeenCalledWith("acc-1", {
+      name: "alice@example.com",
+      issuer: "GitHub",
+      secret: "JBSWY3DPEHPK3PXP",
+      remark: "",
+    });
+  });
 });

@@ -120,12 +120,14 @@ export default function HomePage({
   );
 
   return (
-    <div className="pt-6 px-4">
+    <div className="flex flex-col gap-6 px-6 py-5">
       <Dashboard accounts={accounts} groups={groups} />
-      <div className="grid gap-6 md:grid-cols-2">
+
+      <div className="grid items-start gap-5 md:grid-cols-2">
         <ImageUploader onAccountsDecoded={handleImageDecoded} />
         <ManualAddForm onAccountAdded={handleManualAdd} />
       </div>
+
       <RecentAccounts accounts={accounts} />
     </div>
   );

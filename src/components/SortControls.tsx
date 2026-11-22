@@ -1,3 +1,6 @@
+import { ArrowDown, ArrowUp } from "lucide-react";
+import { NativeSelect } from "./ui/native-select";
+import { Button } from "./ui/button";
 import type { SortConfig, SortField } from "../types";
 
 interface SortControlsProps {
@@ -13,23 +16,26 @@ const fieldOptions: { value: SortField; label: string }[] = [
 
 export default function SortControls({ config, onChange }: SortControlsProps) {
   return (
-    <div className="flex items-center gap-2">
-      <select
+    <div className="flex items-center gap-1.5">
+      <NativeSelect
         value={config.field}
         onChange={(e) =>
           onChange({ ...config, field: e.target.value as SortField })
         }
         aria-label="排序字段"
-        className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 dark:text-gray-100"
+        wrapperClassName="w-auto min-w-[6.5rem]"
+        className="h-8 text-xs"
       >
         {fieldOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}
-      </select>
+      </NativeSelect>
 
-      <button
+      <Button
+        variant="outline"
+        size="icon-sm"
         onClick={() =>
           onChange({
             ...config,
@@ -38,10 +44,13 @@ export default function SortControls({ config, onChange }: SortControlsProps) {
         }
         aria-label={config.direction === "asc" ? "升序，点击切换为降序" : "降序，点击切换为升序"}
         title={config.direction === "asc" ? "升序" : "降序"}
-        className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 dark:text-gray-100 transition-colors"
       >
-        {config.direction === "asc" ? "↑" : "↓"}
-      </button>
+        {config.direction === "asc" ? (
+          <ArrowUp className="size-3.5" aria-hidden="true" />
+        ) : (
+          <ArrowDown className="size-3.5" aria-hidden="true" />
+        )}
+      </Button>
     </div>
   );
 }

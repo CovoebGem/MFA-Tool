@@ -1,16 +1,17 @@
-import { useState, useEffect } from "react";
-import type { OTPAccount } from "../types";
-import { isValidBase32 } from "../lib/validators";
-import { findInternalDuplicates } from "../lib/dedup-checker";
-import CheckResultDialog from "./CheckResultDialog";
-import type { CheckResult } from "./CheckResultDialog";
+import { useState, useEffect, useRef } from "react";
+import { CheckSquare, FolderInput, Loader2, MinusSquare, Pin, PinOff, RefreshCw, Square, Trash2, X } from "lucide-react";
+import { isAccountPinned } from "../lib/sorter";
+import { cn } from "../lib/utils";
+import type { Group, OTPAccount } from "../types";
 
 export interface AccountToolbarProps {
   accounts: OTPAccount[];
-  allAccounts?: OTPAccount[];
+  groups?: Group[];
   selectedIds: Set<string>;
   onDelete: (id: string) => void;
   onBatchDelete?: (ids: string[]) => Promise<void> | void;
+  onBatchSetPinned?: (accountIds: string[], pinned: boolean) => Promise<void> | void;
+  onBatchMoveToGroup?: (accountIds: string[], groupId: string) => Promise<void> | void;
   onRefresh: () => Promise<void>;
   onToggleSelectAll: () => void;
   onClearSelection: () => void;
@@ -18,35 +19,38 @@ export interface AccountToolbarProps {
 
 export default function AccountToolbar({
   accounts,
-  allAccounts,
+  groups,
   selectedIds,
   onDelete,
   onBatchDelete,
+  onBatchSetPinned,
+  onBatchMoveToGroup,
   onRefresh,
   onToggleSelectAll,
   onClearSelection,
 }: AccountToolbarProps) {
   const hasAccounts = accounts.length > 0;
-  const checkAccounts = allAccounts ?? accounts;
+  const hasSelection = selectedIds.size > 0;
+  const selectedVisibleAccounts = accounts.filter((account) => selectedIds.has(account.id));
+  const selectedVisibleCount = selectedVisibleAccounts.length;
   const allVisibleSelected = hasAccounts && accounts.every((account) => selectedIds.has(account.id));
-  const selectedVisibleCount = accounts.reduce(
-    (count, account) => (selectedIds.has(account.id) ? count + 1 : count),
-    0,
-  );
+  const allSelectedPinned =
+    selectedVisibleCount > 0 && selectedVisibleAccounts.every(isAccountPinned);
+  const selectionState = allVisibleSelected
+    ? "all"
+    : selectedVisibleCount > 0
+      ? "partial"
+      : "none";
 
-  const [checking, setChecking] = useState(false);
-  const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
-  const [showCheckResult, setShowCheckResult] = useState(false);
-  const [checkSuccess, setCheckSuccess] = useState(false);
+  const [pinning, setPinning] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const moveMenuContainerRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!checkSuccess) return;
-    const timer = setTimeout(() => setCheckSuccess(false), 2000);
-    return () => clearTimeout(timer);
-  }, [checkSuccess]);
+  const moveMenuOpen = showMoveMenu && hasSelection && !moving;
 
   useEffect(() => {
     if (!refreshError) return;
@@ -54,30 +58,60 @@ export default function AccountToolbar({
     return () => clearTimeout(timer);
   }, [refreshError]);
 
-  const handleCheck = async () => {
-    setChecking(true);
-    setCheckSuccess(false);
+  useEffect(() => {
+    if (!moveMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        moveMenuContainerRef.current &&
+        !moveMenuContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowMoveMenu(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowMoveMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [moveMenuOpen]);
+
+  const handleTogglePin = async () => {
+    if (!hasSelection || !onBatchSetPinned || pinning) {
+      return;
+    }
+    setPinning(true);
     try {
-      const invalidAccounts: CheckResult["invalidAccounts"] = [];
-      for (const account of checkAccounts) {
-        try {
-          if (!isValidBase32(account.secret)) {
-            invalidAccounts.push({ account, reason: "密钥不是有效的 Base32 编码" });
-          }
-        } catch {
-          invalidAccounts.push({ account, reason: "密钥校验失败" });
-        }
-      }
-      const duplicateGroups = findInternalDuplicates(checkAccounts);
-      const result: CheckResult = { invalidAccounts, duplicateGroups };
-      if (invalidAccounts.length > 0 || duplicateGroups.length > 0) {
-        setCheckResult(result);
-        setShowCheckResult(true);
-      } else {
-        setCheckSuccess(true);
-      }
+      await onBatchSetPinned(Array.from(selectedIds), !allSelectedPinned);
+      onClearSelection();
+    } catch {
+      // 保存失败时保留选中状态，错误提示由上层负责
     } finally {
-      setChecking(false);
+      setPinning(false);
+    }
+  };
+
+  const handleMoveToGroup = async (groupId: string) => {
+    if (!hasSelection || !onBatchMoveToGroup || moving) {
+      return;
+    }
+    setMoving(true);
+    setShowMoveMenu(false);
+    try {
+      await onBatchMoveToGroup(Array.from(selectedIds), groupId);
+      onClearSelection();
+    } catch {
+      // 移动失败时保留选中状态，错误提示由上层负责
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -87,7 +121,7 @@ export default function AccountToolbar({
       return;
     }
     const confirmed = window.confirm(
-      `确定要删除选中的 ${selectedIds.size} 个账户吗？`
+      `确定要删除选中的 ${selectedIds.size} 个账户吗？`,
     );
     if (!confirmed) return;
     setDeleting(true);
@@ -120,143 +154,193 @@ export default function AccountToolbar({
   };
 
   const iconBtnBase =
-    "relative group p-2 rounded-md border transition-colors";
+    "relative group inline-flex size-8 items-center justify-center rounded-lg border transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97] cursor-pointer";
   const iconBtnNormal =
-    "text-slate-600 bg-white border-slate-300 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white";
+    "border-border bg-card text-muted-foreground shadow-2xs hover:bg-accent hover:text-foreground";
   const iconBtnDisabled =
-    "text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed dark:text-gray-500 dark:bg-gray-800/50 dark:border-gray-700";
+    "border-border/70 bg-muted text-muted-foreground/50 cursor-not-allowed active:scale-100";
+
+  const pinActionLabel = allSelectedPinned ? "取消置顶" : "置顶";
+  const canPin = hasSelection && !pinning && Boolean(onBatchSetPinned);
+  const canMove =
+    hasSelection &&
+    !moving &&
+    Boolean(onBatchMoveToGroup) &&
+    Boolean(groups && groups.length > 0);
 
   return (
-    <>
-      <div className="flex items-center gap-1">
-        {/* 检查 */}
-        <button
-          type="button"
-          aria-label="检查"
-          title="检查"
-          onClick={handleCheck}
-          disabled={checking}
-          className={`${iconBtnBase} ${checking ? iconBtnDisabled : iconBtnNormal}`}
-        >
-          {checking ? (
-            <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          ) : (
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M9 12l2 2 4-4" />
-              <circle cx="12" cy="12" r="10" />
-            </svg>
-          )}
-          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-            检查
-          </span>
-        </button>
-
-        {/* 删除 */}
-        {hasAccounts && (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {hasSelection && (
+        <div className="inline-flex h-8 items-center gap-1 rounded-lg border border-primary/25 bg-primary/8 px-2 text-xs font-medium text-primary tabular-nums">
+          <span>已选 {selectedIds.size}</span>
           <button
             type="button"
-            aria-label="删除"
-            title="删除"
-            onClick={handleDelete}
-            disabled={deleting}
-            className={`${iconBtnBase} ${deleting ? iconBtnDisabled : "text-slate-600 bg-white border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300 dark:text-slate-200 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:hover:border-red-500/40"}`}
+            onClick={onClearSelection}
+            aria-label="取消选择"
+            title="取消选择"
+            className="inline-flex size-4 items-center justify-center rounded hover:bg-primary/15 cursor-pointer"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-              <line x1="10" y1="11" x2="10" y2="17" />
-              <line x1="14" y1="11" x2="14" y2="17" />
-            </svg>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-              删除
-            </span>
+            <X className="size-3" aria-hidden="true" />
           </button>
-        )}
-
-        {/* 刷新 */}
-        <button
-          type="button"
-          aria-label="刷新"
-          title="刷新"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className={`${iconBtnBase} ${refreshing ? iconBtnDisabled : iconBtnNormal}`}
-        >
-          {refreshing ? (
-            <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          ) : (
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="23 4 23 10 17 10" />
-              <polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-            </svg>
-          )}
-          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-            刷新
-          </span>
-        </button>
-
-        {/* 全选 */}
-        {hasAccounts && (
-          <button
-            type="button"
-            aria-label="全选"
-            title={allVisibleSelected ? "取消全选" : "全选"}
-            onClick={onToggleSelectAll}
-            className={`${iconBtnBase} ${
-              allVisibleSelected
-                ? "text-blue-700 bg-blue-50 border-blue-300 hover:bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40 dark:border-blue-500/40 dark:hover:bg-blue-900/60"
-                : selectedVisibleCount > 0
-                  ? "text-blue-600 bg-white border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:bg-gray-800 dark:border-blue-500/30 dark:hover:bg-blue-950/30"
-                  : iconBtnNormal
-            }`}
-          >
-            {allVisibleSelected ? (
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
-            ) : selectedVisibleCount > 0 ? (
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <line x1="8" y1="12" x2="16" y2="12" />
-              </svg>
-            ) : (
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-              </svg>
-            )}
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-              {allVisibleSelected ? "取消全选" : "全选"}
-            </span>
-          </button>
-        )}
-
-        {/* 状态提示 */}
-        {checkSuccess && (
-          <span className="ml-1 text-sm text-green-600 font-medium" role="status">
-            ✓ 正常
-          </span>
-        )}
-        {refreshError && (
-          <span className="ml-1 text-sm text-red-600 font-medium" role="alert">
-            ✕ {refreshError}
-          </span>
-        )}
-      </div>
-
-      {showCheckResult && checkResult && (
-        <CheckResultDialog
-          result={checkResult}
-          onClose={() => setShowCheckResult(false)}
-        />
+        </div>
       )}
-    </>
+
+      {/* 置顶 / 取消置顶 */}
+      {hasAccounts && (
+        <button
+          type="button"
+          aria-label={pinActionLabel}
+          title={!hasSelection ? "选择账户后可置顶" : pinActionLabel}
+          onClick={() => void handleTogglePin()}
+          disabled={!canPin}
+          className={cn(
+            iconBtnBase,
+            !canPin
+              ? iconBtnDisabled
+              : allSelectedPinned
+                ? "border-pin/40 bg-pin-surface text-pin-foreground hover:bg-pin/15"
+                : iconBtnNormal,
+          )}
+        >
+          {pinning ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : allSelectedPinned ? (
+            <PinOff className="size-4" aria-hidden="true" />
+          ) : (
+            <Pin className="size-4" aria-hidden="true" />
+          )}
+          <span className="pointer-events-none absolute -bottom-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-0.5 text-[11px] font-medium text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+            {pinActionLabel}
+          </span>
+        </button>
+      )}
+
+      {/* 移动到分组 */}
+      {hasAccounts && (
+        <div ref={moveMenuContainerRef} className="relative">
+          <button
+            type="button"
+            aria-label="移动到分组"
+            aria-haspopup="menu"
+            aria-expanded={moveMenuOpen}
+            title={!hasSelection ? "选择账户后可移动分组" : "移动到分组"}
+            onClick={() => canMove && setShowMoveMenu((prev) => !prev)}
+            disabled={!canMove}
+            className={cn(iconBtnBase, !canMove ? iconBtnDisabled : iconBtnNormal)}
+          >
+            {moving ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <FolderInput className="size-4" aria-hidden="true" />
+            )}
+            <span className="pointer-events-none absolute -bottom-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-0.5 text-[11px] font-medium text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+              移动
+            </span>
+          </button>
+
+          {moveMenuOpen && groups && (
+            <div
+              role="menu"
+              aria-label="选择目标分组"
+              className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg"
+            >
+              <div className="px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground">
+                移动 {selectedIds.size} 个账户到分组
+              </div>
+              <div className="max-h-60 overflow-y-auto">
+                {groups.map((group) => (
+                  <button
+                    key={group.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void handleMoveToGroup(group.id)}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  >
+                    <span className="truncate">{group.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 删除 */}
+      {hasAccounts && (
+        <button
+          type="button"
+          aria-label="删除"
+          title="删除"
+          onClick={() => void handleDelete()}
+          disabled={deleting}
+          className={cn(
+            iconBtnBase,
+            deleting
+              ? iconBtnDisabled
+              : "border-border bg-card text-muted-foreground shadow-2xs hover:border-destructive/40 hover:bg-destructive-surface hover:text-destructive-foreground",
+          )}
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+          <span className="pointer-events-none absolute -bottom-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-0.5 text-[11px] font-medium text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+            删除
+          </span>
+        </button>
+      )}
+
+      {/* 刷新 */}
+      <button
+        type="button"
+        aria-label="刷新"
+        title="刷新"
+        onClick={() => void handleRefresh()}
+        disabled={refreshing}
+        className={cn(iconBtnBase, refreshing ? iconBtnDisabled : iconBtnNormal)}
+      >
+        <RefreshCw
+          className={cn("size-4", refreshing && "animate-spin")}
+          aria-hidden="true"
+        />
+        <span className="pointer-events-none absolute -bottom-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-0.5 text-[11px] font-medium text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+          刷新
+        </span>
+      </button>
+
+      {/* 全选 */}
+      {hasAccounts && (
+        <button
+          type="button"
+          aria-label="全选"
+          title={allVisibleSelected ? "取消全选" : "全选"}
+          data-selection-state={selectionState}
+          onClick={onToggleSelectAll}
+          className={cn(
+            iconBtnBase,
+            selectionState === "all"
+              ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+              : selectionState === "partial"
+                ? "border-primary/25 bg-card text-primary hover:bg-accent"
+                : iconBtnNormal,
+          )}
+        >
+          {selectionState === "all" ? (
+            <CheckSquare className="size-4" aria-hidden="true" />
+          ) : selectionState === "partial" ? (
+            <MinusSquare className="size-4" aria-hidden="true" />
+          ) : (
+            <Square className="size-4" aria-hidden="true" />
+          )}
+          <span className="pointer-events-none absolute -bottom-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-0.5 text-[11px] font-medium text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+            {allVisibleSelected ? "取消全选" : "全选"}
+          </span>
+        </button>
+      )}
+
+      {refreshError && (
+        <span className="ml-1 inline-flex items-center gap-1 text-xs font-medium text-destructive-foreground" role="alert">
+          <X className="size-3.5" aria-hidden="true" />
+          {refreshError}
+        </span>
+      )}
+    </div>
   );
 }

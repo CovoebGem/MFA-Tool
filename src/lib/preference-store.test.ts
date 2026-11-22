@@ -4,6 +4,16 @@ import {
   saveSortConfig,
   loadSortConfig,
   DEFAULT_SORT_CONFIG,
+  isValidViewMode,
+  saveViewMode,
+  loadViewMode,
+  DEFAULT_VIEW_MODE,
+  isValidCardLayoutConfig,
+  normalizeCardLayoutConfig,
+  getCardScale,
+  saveCardLayoutConfig,
+  loadCardLayoutConfig,
+  DEFAULT_CARD_LAYOUT_CONFIG,
 } from "./preference-store";
 
 describe("preference-store", () => {
@@ -85,6 +95,86 @@ describe("preference-store", () => {
         JSON.stringify({ field: "unknown", direction: "asc" })
       );
       expect(loadSortConfig()).toEqual(DEFAULT_SORT_CONFIG);
+    });
+  });
+
+  describe("viewMode preference", () => {
+    it("validates supported view modes only", () => {
+      expect(isValidViewMode("grid")).toBe(true);
+      expect(isValidViewMode("list")).toBe(true);
+      expect(isValidViewMode("table")).toBe(false);
+      expect(isValidViewMode("")).toBe(false);
+      expect(isValidViewMode(null)).toBe(false);
+      expect(isValidViewMode(123)).toBe(false);
+    });
+
+    it("saves and loads view mode with grid default fallback", () => {
+      expect(loadViewMode()).toBe(DEFAULT_VIEW_MODE);
+
+      saveViewMode("list");
+      expect(localStorage.getItem("2fa-view-mode")).toBe("list");
+      expect(loadViewMode()).toBe("list");
+
+      saveViewMode("grid");
+      expect(loadViewMode()).toBe("grid");
+
+      localStorage.setItem("2fa-view-mode", "invalid-mode");
+      expect(loadViewMode()).toBe(DEFAULT_VIEW_MODE);
+    });
+  });
+
+  describe("cardLayout preference", () => {
+    it("getCardScale maps card widths to compact, normal, and large scales", () => {
+      expect(getCardScale(260)).toBe("compact");
+      expect(getCardScale(280)).toBe("compact");
+      expect(getCardScale(290)).toBe("normal");
+      expect(getCardScale(350)).toBe("normal");
+      expect(getCardScale(360)).toBe("large");
+      expect(getCardScale(440)).toBe("large");
+    });
+
+    it("isValidCardLayoutConfig validates integer bounds and shape", () => {
+      expect(isValidCardLayoutConfig({ cardMinWidth: 310, cardGap: 14 })).toBe(true);
+      expect(isValidCardLayoutConfig({ cardMinWidth: 260, cardGap: 8 })).toBe(true);
+      expect(isValidCardLayoutConfig({ cardMinWidth: 440, cardGap: 32 })).toBe(true);
+
+      expect(isValidCardLayoutConfig({ cardMinWidth: 259, cardGap: 14 })).toBe(false);
+      expect(isValidCardLayoutConfig({ cardMinWidth: 441, cardGap: 14 })).toBe(false);
+      expect(isValidCardLayoutConfig({ cardMinWidth: 310, cardGap: 7 })).toBe(false);
+      expect(isValidCardLayoutConfig({ cardMinWidth: 310, cardGap: 33 })).toBe(false);
+      expect(isValidCardLayoutConfig({ cardMinWidth: 310.5, cardGap: 14 })).toBe(false);
+      expect(isValidCardLayoutConfig(null)).toBe(false);
+      expect(isValidCardLayoutConfig([])).toBe(false);
+    });
+
+    it("normalizeCardLayoutConfig clamps out-of-range values, snaps to steps, and handles non-finite", () => {
+      expect(normalizeCardLayoutConfig({ cardMinWidth: 100, cardGap: 50 })).toEqual({
+        cardMinWidth: 260,
+        cardGap: 32,
+      });
+      expect(normalizeCardLayoutConfig({ cardMinWidth: 314, cardGap: 15 })).toEqual({
+        cardMinWidth: 310,
+        cardGap: 16,
+      });
+      expect(normalizeCardLayoutConfig({ cardMinWidth: Number.NaN })).toEqual(
+        DEFAULT_CARD_LAYOUT_CONFIG,
+      );
+    });
+
+    it("saveCardLayoutConfig and loadCardLayoutConfig persist and recover safely", () => {
+      expect(loadCardLayoutConfig()).toEqual(DEFAULT_CARD_LAYOUT_CONFIG);
+
+      saveCardLayoutConfig({ cardMinWidth: 380, cardGap: 20 });
+      expect(localStorage.getItem("2fa-card-layout")).toBe(
+        JSON.stringify({ cardMinWidth: 380, cardGap: 20 }),
+      );
+      expect(loadCardLayoutConfig()).toEqual({ cardMinWidth: 380, cardGap: 20 });
+
+      localStorage.setItem("2fa-card-layout", "not-json");
+      expect(loadCardLayoutConfig()).toEqual(DEFAULT_CARD_LAYOUT_CONFIG);
+
+      localStorage.setItem("2fa-card-layout", JSON.stringify({ cardMinWidth: 999, cardGap: 14 }));
+      expect(loadCardLayoutConfig()).toEqual(DEFAULT_CARD_LAYOUT_CONFIG);
     });
   });
 });

@@ -1,3 +1,6 @@
+import { Alert, AlertDescription } from "./ui/alert";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import type { DedupResult } from "../types";
 
 interface DedupDialogProps {
@@ -25,46 +28,46 @@ export default function DedupDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-label="导入去重检测"
     >
-      <div className="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-2xl">
+        <h2 className="mb-2 text-lg font-semibold text-card-foreground">
           检测到重复账户
         </h2>
 
-        <p className="mb-4 text-sm text-gray-600">
+        <p className="mb-4 text-sm text-muted-foreground">
           共 {unique.length + duplicates.length} 个账户，其中{" "}
-          <span className="font-medium text-green-600">
+          <span className="font-medium text-success-foreground">
             {unique.length} 个新账户
           </span>
           、
-          <span className="font-medium text-orange-600">
+          <span className="font-medium text-warning-foreground">
             {duplicates.length} 个重复
           </span>
           。
         </p>
 
         {duplicates.length > 0 && (
-          <ul className="mb-5 max-h-60 space-y-2 overflow-y-auto">
+          <ul className="mb-5 flex max-h-60 flex-col gap-2 overflow-y-auto">
             {duplicates.map((dup, idx) => (
               <li
                 key={idx}
-                className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm"
+                className="rounded-xl border border-warning/30 bg-warning-surface px-3.5 py-2.5 text-sm"
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-800">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground">
                     {dup.incoming.issuer
                       ? `${dup.incoming.issuer} - ${dup.incoming.name}`
                       : dup.incoming.name}
                   </span>
-                  <span className="ml-2 rounded bg-orange-200 px-1.5 py-0.5 text-xs text-orange-800">
+                  <Badge variant="warning">
                     {matchTypeLabel(dup.matchType)}
-                  </span>
+                  </Badge>
                 </div>
-                <div className="mt-1 text-xs text-gray-500">
+                <div className="mt-1 text-xs text-muted-foreground">
                   已有：
                   {dup.existing.issuer
                     ? `${dup.existing.issuer} - ${dup.existing.name}`
@@ -76,39 +79,32 @@ export default function DedupDialog({
         )}
 
         {error && (
-          <div
-            role="alert"
-            className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-          >
-            {error}
-          </div>
+          <Alert variant="destructive" role="alert" className="mb-4">
+            <AlertDescription className="opacity-100">{error}</AlertDescription>
+          </Alert>
         )}
 
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
             disabled={submitting}
             onClick={onCancel}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             取消
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             disabled={submitting}
             onClick={onSkip}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "处理中..." : "跳过重复项"}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="pin"
             disabled={submitting}
             onClick={onOverride}
-            className="rounded-lg bg-orange-600 px-4 py-2 text-sm text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "处理中..." : "覆盖重复项"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

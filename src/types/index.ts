@@ -25,6 +25,12 @@ export interface OTPAccount {
   groupId: string;
   /** 自定义排序顺序，数字越小越靠前 */
   order?: number;
+  /** 是否置顶 */
+  pinned?: boolean;
+  /** 最近置顶时间戳 */
+  pinnedAt?: number;
+  /** 账户备注，用于标识额外说明内容 */
+  remark?: string;
 }
 
 /** 分组 */
@@ -43,6 +49,18 @@ export interface Group {
 
 /** 页面路由类型 */
 export type Page = "home" | "accounts" | "groups" | "temp" | "sync";
+
+/** 账户展示视图模式 */
+export type AccountViewMode = "grid" | "list";
+
+/** 卡片布局配置（网格卡片最小宽度与卡片间距，单位 px） */
+export interface CardLayoutConfig {
+  cardMinWidth: number;
+  cardGap: number;
+}
+
+/** 卡片尺寸比例档位 */
+export type CardScale = "compact" | "normal" | "large";
 
 /** 排序字段 */
 export type SortField = "name" | "issuer" | "createdAt";

@@ -1,5 +1,25 @@
 import * as OTPAuth from "otpauth";
 
+const MAX_SECRET_CACHE_SIZE = 1000;
+const secretCache = new Map<string, OTPAuth.Secret>();
+
+function getParsedSecret(secret: string): OTPAuth.Secret {
+  const cached = secretCache.get(secret);
+  if (cached) {
+    return cached;
+  }
+
+  const parsed = OTPAuth.Secret.fromBase32(secret);
+  if (secretCache.size >= MAX_SECRET_CACHE_SIZE) {
+    const oldestKey = secretCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      secretCache.delete(oldestKey);
+    }
+  }
+  secretCache.set(secret, parsed);
+  return parsed;
+}
+
 /**
  * 为指定账户生成当前 TOTP 验证码
  * @param secret - base32 编码的密钥
@@ -17,7 +37,7 @@ export function generateTOTP(
     algorithm: "SHA1",
     digits,
     period,
-    secret: OTPAuth.Secret.fromBase32(secret),
+    secret: getParsedSecret(secret),
     timestamp,
   });
 

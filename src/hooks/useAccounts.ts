@@ -9,6 +9,8 @@ import {
   updateAccount,
   moveAccountToGroup,
   moveAccountsToGroup,
+  toggleAccountPin,
+  setAccountsPinned,
 } from "../lib/account-manager";
 import { sanitizeAccountNumbers } from "../lib/backup";
 import { checkDuplicates } from "../lib/dedup-checker";
@@ -239,10 +241,37 @@ export function useAccounts() {
   }, [runSerializedAccountWrite]);
 
   const editAccount = useCallback(
-    async (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>) => {
+    async (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret" | "remark">>) => {
       await commitAccounts(
         (current) => updateAccount(current, id, updates),
         "编辑账户失败",
+      );
+    },
+    [commitAccounts],
+  );
+
+  const togglePinAccount = useCallback(
+    async (id: string) => {
+      await commitAccounts(
+        (current) => toggleAccountPin(current, id),
+        "更新置顶状态失败",
+      );
+    },
+    [commitAccounts],
+  );
+
+  const batchSetPinned = useCallback(
+    async (ids: string[], pinned: boolean) => {
+      if (ids.length === 0) {
+        return;
+      }
+      await commitAccounts(
+        (current) => {
+          const updated = setAccountsPinned(current, ids, pinned);
+          return updated === current ? null : updated;
+        },
+        pinned ? "批量置顶失败" : "批量取消置顶失败",
+        { rethrow: true },
       );
     },
     [commitAccounts],
@@ -262,6 +291,8 @@ export function useAccounts() {
     deleteAccount,
     batchDeleteAccounts,
     editAccount,
+    togglePinAccount,
+    batchSetPinned,
     moveToGroup,
     batchMoveToGroup,
     detectDuplicates,

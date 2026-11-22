@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { ChevronDown, Download, Upload } from "lucide-react";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { writeFile, writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import {
@@ -12,6 +13,8 @@ import {
   generateExportFilename,
   type ExportFormat,
 } from "../lib/account-export";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
 import type { OTPAccount, Group } from "../types";
 
 interface BackupPanelProps {
@@ -55,30 +58,6 @@ const EXPORT_FORMAT_OPTIONS: ReadonlyArray<{
     mimeType: "application/json",
   },
 ];
-
-function DownloadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-    </svg>
-  );
-}
-
-function UploadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-    </svg>
-  );
-}
 
 export default function BackupPanel({ accounts, groups, selectedAccountIds, onImport, onToast }: BackupPanelProps) {
   const [importing, setImporting] = useState(false);
@@ -202,7 +181,7 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
           },
         ],
       });
-      
+
       if (filePath && typeof filePath === "string") {
         await handleImportFile(filePath);
       }
@@ -254,25 +233,31 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
   return (
     <div className="flex items-center gap-2">
       <div className="relative" ref={exportContainerRef}>
-        <button
+        <Button
           ref={exportButtonRef}
-          type="button"
+          variant="outline"
+          size="sm"
           onClick={() => setExportMenuOpen((prev) => !prev)}
           disabled={exportCount === 0 || exporting}
           aria-haspopup="menu"
           aria-expanded={showExportMenu}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          <DownloadIcon className="w-4 h-4" />
-          <span>{hasSelection ? `导出选中 (${selectedAccountIds?.size})` : "导出全部"}</span>
-          <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${showExportMenu ? "rotate-180" : ""}`} />
-        </button>
+          <Download className="size-3.5" aria-hidden="true" />
+          <span>{hasSelection ? `导出选中 (${selectedAccountIds?.size})` : "导出"}</span>
+          <ChevronDown
+            className={cn(
+              "size-3.5 transition-transform duration-150",
+              showExportMenu && "rotate-180",
+            )}
+            aria-hidden="true"
+          />
+        </Button>
 
         {showExportMenu && (
           <div
             role="menu"
             aria-label="选择导出格式"
-            className="absolute right-0 z-40 mt-2 w-72 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-1.5 shadow-lg"
+            className="absolute right-0 z-40 mt-2 w-72 origin-top-right rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg"
           >
             {EXPORT_FORMAT_OPTIONS.map((option) => (
               <button
@@ -280,12 +265,12 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
                 type="button"
                 role="menuitem"
                 onClick={() => void handleExportFormat(option)}
-                className="flex w-full flex-col items-start rounded-lg px-3 py-2 text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent cursor-pointer"
               >
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
+                <span className="text-sm font-medium text-foreground">
                   {option.label}
                 </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-muted-foreground">
                   {option.description}
                 </span>
               </button>
@@ -294,15 +279,15 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
         )}
       </div>
 
-      <button
-        type="button"
+      <Button
+        variant="outline"
+        size="sm"
         onClick={handleImportClick}
         disabled={importing}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        <UploadIcon className="w-4 h-4" />
-        {importing ? "导入中..." : "导入备份"}
-      </button>
+        <Upload className="size-3.5" aria-hidden="true" />
+        {importing ? "导入中..." : "导入"}
+      </Button>
 
       <input
         ref={fileInputRef}

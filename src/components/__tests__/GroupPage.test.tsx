@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import GroupPage from "../GroupPage";
 import type { Group, OTPAccount } from "../../types";
 
@@ -44,6 +44,7 @@ const defaultProps = {
 describe("GroupPage", () => {
   beforeEach(() => {
     cleanup();
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -194,6 +195,312 @@ describe("GroupPage", () => {
       const jumpButton = screen.getByRole("button", { name: "在全部账户中查看 1 个结果" });
       fireEvent.click(jumpButton);
       expect(onSearchInAllAccounts).toHaveBeenCalledWith("AWS");
+    });
+  });
+
+  describe("分组内置顶排序、删除分组与视图切换", () => {
+    it("分组内与切换不同归属分组均展示置顶分层、支持列表视图且不显示卡片置顶按钮", () => {
+      const accountsWithPin: OTPAccount[] = [
+        { ...mockAccounts[0], pinned: false, remark: "研发日常" },
+        { ...mockAccounts[1], pinned: true, pinnedAt: 999 },
+        { ...mockAccounts[2], pinned: true, pinnedAt: 888 },
+      ];
+
+      render(
+        <GroupPage
+          {...defaultProps}
+          accounts={accountsWithPin}
+        />,
+      );
+
+      expect(
+        document.querySelectorAll('[data-slot="card"] button[aria-label*="置顶"]'),
+      ).toHaveLength(0);
+      const pinnedSection = screen.getByRole("region", { name: "已置顶" });
+      const otherSection = screen.getByRole("region", { name: "其他账户" });
+      expect(pinnedSection).toHaveTextContent("Google");
+      expect(otherSection).toHaveTextContent("GitHub");
+      expect(otherSection).toHaveTextContent("研发日常");
+
+      // 切换到列表视图时同样保持分组内置顶分层并显示备注
+      fireEvent.click(screen.getByRole("button", { name: "列表视图" }));
+      expect(screen.getByRole("region", { name: "已置顶" })).toHaveTextContent("Google");
+      expect(screen.getByRole("region", { name: "其他账户" })).toHaveTextContent("研发日常");
+      expect(
+        document.querySelectorAll('[data-slot="account-row"] button[aria-label*="置顶"]'),
+      ).toHaveLength(0);
+
+      // 切换到另一个包含已置顶账户的分组也显示为置顶分层
+      fireEvent.click(screen.getByRole("button", { name: "网格视图" }));
+      const select = screen.getByLabelText("选择分组") as HTMLSelectElement;
+      fireEvent.change(select, { target: { value: "g2" } });
+      expect(screen.getByRole("region", { name: "已置顶" })).toHaveTextContent("AWS");
+    });
+
+    it("默认分组禁用删除当前分组按钮，非默认分组删除前提示账户将移入默认分组并触发回调", async () => {
+      const onDeleteGroup = vi.fn().mockResolvedValue(undefined);
+      render(<GroupPage {...defaultProps} onDeleteGroup={onDeleteGroup} />);
+
+      // 默认选中 g1 (默认分组)
+      const deleteGroupBtn = screen.getByRole("button", { name: "删除当前分组" });
+      expect(deleteGroupBtn).toBeDisabled();
+
+      // 切换到 g2 ("工作"，内有 1 个账户 AWS)
+      fireEvent.change(screen.getByLabelText("选择分组"), { target: { value: "g2" } });
+      expect(deleteGroupBtn).toBeEnabled();
+
+      fireEvent.click(deleteGroupBtn);
+      const dialog = screen.getByRole("dialog", { name: "确认删除分组" });
+      expect(dialog).toHaveTextContent("工作");
+      expect(dialog).toHaveTextContent("1 个账户将自动移入「默认分组」分组，不会丢失");
+
+      fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+      expect(onDeleteGroup).toHaveBeenCalledWith("g2");
+    });
+
+    it("支持切换网格视图与列表视图", () => {
+      render(<GroupPage {...defaultProps} />);
+
+      const listBtn = screen.getByRole("button", { name: "列表视图" });
+      fireEvent.click(listBtn);
+
+      expect(listBtn).toHaveAttribute("aria-pressed", "true");
+      expect(localStorage.getItem("2fa-view-mode")).toBe("list");
+      expect(document.querySelector('[data-slot="account-list"]')).toBeInTheDocument();
+      expect(document.querySelectorAll('[data-slot="account-row"]')).toHaveLength(2);
+    });
+  });
+
+  describe("分组内批量选择与工具栏操作", () => {
+    it("支持网格和列表视图勾选、全选、批量置顶/取消置顶、批量移动分组与批量删除", async () => {
+      const onBatchSetPinned = vi.fn().mockResolvedValue(undefined);
+      const onBatchMoveToGroup = vi.fn().mockResolvedValue(undefined);
+      const onBatchDelete = vi.fn().mockResolvedValue(undefined);
+      const onRefresh = vi.fn().mockResolvedValue(undefined);
+      const onSelectedIdsChange = vi.fn();
+
+      const accounts: OTPAccount[] = [
+        { ...mockAccounts[0], pinned: false },
+        { ...mockAccounts[1], pinned: true, pinnedAt: 500 },
+        { ...mockAccounts[2], pinned: false },
+      ];
+
+      render(
+        <GroupPage
+          {...defaultProps}
+          accounts={accounts}
+          onBatchSetPinned={onBatchSetPinned}
+          onBatchMoveToGroup={onBatchMoveToGroup}
+          onBatchDelete={onBatchDelete}
+          onRefresh={onRefresh}
+          onSelectedIdsChange={onSelectedIdsChange}
+        />,
+      );
+
+      // 当前默认选中 g1，包含 GitHub (a1) 与 Google (a2)
+      const githubCheckbox = screen.getByLabelText("选择账户 GitHub");
+      fireEvent.click(githubCheckbox);
+      expect(screen.getByText("已选 1")).toBeInTheDocument();
+
+      // 批量置顶选中项
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "置顶" }));
+        await Promise.resolve();
+      });
+      expect(onBatchSetPinned).toHaveBeenCalledWith(["a1"], true);
+      expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+
+      // 选中已置顶账户 Google 后按钮切换为取消置顶
+      fireEvent.click(screen.getByLabelText("选择账户 Google"));
+      expect(screen.getByText("已选 1")).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "取消置顶" }));
+        await Promise.resolve();
+      });
+      expect(onBatchSetPinned).toHaveBeenLastCalledWith(["a2"], false);
+
+      // 切换到列表视图后点击全选并批量移动到目标分组
+      fireEvent.click(screen.getByRole("button", { name: "列表视图" }));
+      fireEvent.click(screen.getByRole("button", { name: "全选" }));
+      expect(screen.getByText("已选 2")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "移动到分组" }));
+      expect(screen.getByRole("menu", { name: "选择目标分组" })).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(screen.getByRole("menuitem", { name: "工作" }));
+        await Promise.resolve();
+      });
+      expect(onBatchMoveToGroup).toHaveBeenCalledWith(expect.arrayContaining(["a1", "a2"]), "g2");
+      expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+
+      // 再次全选并批量删除
+      fireEvent.click(screen.getByRole("button", { name: "全选" }));
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+      try {
+        await act(async () => {
+          fireEvent.click(screen.getByRole("button", { name: "删除" }));
+          await Promise.resolve();
+        });
+      } finally {
+        confirmSpy.mockRestore();
+      }
+      expect(onBatchDelete).toHaveBeenCalledWith(expect.arrayContaining(["a1", "a2"]));
+      expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+
+      // 刷新按钮可正常触发
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "刷新" }));
+        await Promise.resolve();
+      });
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+    });
+
+    it("切换分组或改变搜索条件清空选中，批量操作失败时保留选中", async () => {
+      const onBatchMoveToGroup = vi.fn().mockRejectedValue(new Error("move failed"));
+
+      render(
+        <GroupPage
+          {...defaultProps}
+          onBatchMoveToGroup={onBatchMoveToGroup}
+        />,
+      );
+
+      // 选中 GitHub 后尝试批量移动并失败 -> 应保留选中状态
+      fireEvent.click(screen.getByLabelText("选择账户 GitHub"));
+      expect(screen.getByText("已选 1")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "移动到分组" }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("menuitem", { name: "工作" }));
+        await Promise.resolve();
+      });
+      expect(screen.getByText("已选 1")).toBeInTheDocument();
+
+      // 改变搜索词会清空选中
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索账户" }), {
+        target: { value: "Google" },
+      });
+      expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+
+      // 清空搜索并再次选中 Google，随后切换分组 -> 选中被清空
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索账户" }), {
+        target: { value: "" },
+      });
+      fireEvent.click(screen.getByLabelText("选择账户 Google"));
+      expect(screen.getByText("已选 1")).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText("选择分组"), { target: { value: "g2" } });
+      expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+    });
+
+    it("支持受控 selectedIds 与 onSelectedIdsChange 回调", () => {
+      const onSelectedIdsChange = vi.fn();
+
+      const { rerender } = render(
+        <GroupPage
+          {...defaultProps}
+          selectedIds={new Set(["a1"])}
+          onSelectedIdsChange={onSelectedIdsChange}
+        />,
+      );
+
+      expect(screen.getByText("已选 1")).toBeInTheDocument();
+      expect(screen.getByLabelText("选择账户 GitHub")).toBeChecked();
+
+      fireEvent.click(screen.getByLabelText("选择账户 Google"));
+      expect(onSelectedIdsChange).toHaveBeenCalledWith(new Set(["a1", "a2"]));
+
+      rerender(
+        <GroupPage
+          {...defaultProps}
+          selectedIds={new Set(["a1", "a2"])}
+          onSelectedIdsChange={onSelectedIdsChange}
+        />,
+      );
+      expect(screen.getByText("已选 2")).toBeInTheDocument();
+    });
+
+    it("支持在网格视图和列表视图中通过左键拖拽框选跨置顶区块的账户", async () => {
+      const accounts: OTPAccount[] = [
+        { ...mockAccounts[0], pinned: false },
+        { ...mockAccounts[1], pinned: true, pinnedAt: 500 },
+        mockAccounts[2],
+      ];
+
+      const { container } = render(
+        <GroupPage {...defaultProps} accounts={accounts} />,
+      );
+
+      const rectHelper = (left: number, top: number, width: number, height: number) =>
+        ({
+          x: left,
+          y: top,
+          left,
+          top,
+          width,
+          height,
+          right: left + width,
+          bottom: top + height,
+          toJSON: () => ({}),
+        }) as DOMRect;
+
+      const cardA2 = container.querySelector('[data-selectable-id="a2"]') as HTMLElement;
+      const cardA1 = container.querySelector('[data-selectable-id="a1"]') as HTMLElement;
+      cardA2.getBoundingClientRect = () => rectHelper(20, 140, 260, 120);
+      cardA1.getBoundingClientRect = () => rectHelper(20, 320, 260, 120);
+
+      const pageRoot = container.firstElementChild as HTMLElement;
+      fireEvent.mouseDown(pageRoot, { button: 0, clientX: 5, clientY: 130 });
+      fireEvent.mouseMove(window, { clientX: 290, clientY: 450 });
+      fireEvent.mouseUp(window, { clientX: 290, clientY: 450 });
+
+      expect(screen.getByText("已选 2")).toBeInTheDocument();
+      expect(screen.getByLabelText("选择账户 Google")).toBeChecked();
+      expect(screen.getByLabelText("选择账户 GitHub")).toBeChecked();
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // 切换列表视图并清空选中后，同样支持拖拽框选列表行
+      fireEvent.click(screen.getByRole("button", { name: "取消选择" }));
+      expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "列表视图" }));
+
+      const rowA2 = container.querySelector('[data-selectable-id="a2"]') as HTMLElement;
+      const rowA1 = container.querySelector('[data-selectable-id="a1"]') as HTMLElement;
+      rowA2.getBoundingClientRect = () => rectHelper(20, 150, 700, 48);
+      rowA1.getBoundingClientRect = () => rectHelper(20, 230, 700, 48);
+
+      fireEvent.mouseDown(pageRoot, { button: 0, clientX: 10, clientY: 140 });
+      fireEvent.mouseMove(window, { clientX: 300, clientY: 205 });
+      fireEvent.mouseUp(window, { clientX: 300, clientY: 205 });
+
+      expect(screen.getByText("已选 1")).toBeInTheDocument();
+      expect(screen.getByLabelText("选择账户 Google")).toBeChecked();
+      expect(screen.getByLabelText("选择账户 GitHub")).not.toBeChecked();
+    });
+
+    it("支持通过卡片布局设置自定义卡片大小和间距并持久化", () => {
+      render(<GroupPage {...defaultProps} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "卡片布局设置" }));
+      fireEvent.change(screen.getByLabelText("卡片大小"), { target: { value: "270" } });
+      fireEvent.change(screen.getByLabelText("卡片间距"), { target: { value: "22" } });
+
+      const grid = screen.getByText("GitHub").closest(".grid") as HTMLElement;
+      expect(grid).toHaveAttribute("data-card-scale", "compact");
+      expect(grid.style.gridTemplateColumns).toBe("repeat(auto-fill, minmax(270px, 1fr))");
+      expect(grid.style.gap).toBe("22px");
+      expect(JSON.parse(localStorage.getItem("2fa-card-layout") ?? "{}")).toEqual({
+        cardMinWidth: 270,
+        cardGap: 22,
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "恢复默认" }));
+      expect(grid).toHaveAttribute("data-card-scale", "normal");
+      expect(grid.style.gridTemplateColumns).toBe("repeat(auto-fill, minmax(310px, 1fr))");
+      expect(grid.style.gap).toBe("14px");
     });
   });
 });

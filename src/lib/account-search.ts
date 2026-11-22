@@ -33,7 +33,7 @@ export function buildGroupNameMap(groups: Group[]): Map<string, string> {
 }
 
 /**
- * 判断账户是否命中所有搜索 token（仅检查 issuer、name、所属分组名，绝不检索 secret）
+ * 判断账户是否命中所有搜索 token（仅检查 issuer、name、remark、所属分组名，绝不检索 secret）
  */
 export function matchesAccountQuery(
   account: OTPAccount,
@@ -46,10 +46,15 @@ export function matchesAccountQuery(
 
   const issuer = normalizeSearchText(account.issuer);
   const name = normalizeSearchText(account.name);
+  const remark = normalizeSearchText(account.remark ?? "");
   const groupName = normalizeSearchText(groupNameById?.get(account.groupId) ?? "");
 
   return tokens.every(
-    (token) => issuer.includes(token) || name.includes(token) || groupName.includes(token),
+    (token) =>
+      issuer.includes(token) ||
+      name.includes(token) ||
+      remark.includes(token) ||
+      groupName.includes(token),
   );
 }
 

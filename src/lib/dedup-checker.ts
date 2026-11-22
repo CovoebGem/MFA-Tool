@@ -65,7 +65,25 @@ export function overrideDuplicates(
 ): OTPAccount[] {
   const updated = existing.map((ex) => {
     const dup = result.duplicates.find((d) => d.existing.id === ex.id);
-    return dup ? dup.incoming : ex;
+    if (!dup) {
+      return ex;
+    }
+    const preservePinned = dup.incoming.pinned === undefined && ex.pinned;
+    const preserveRemark = dup.incoming.remark === undefined && Boolean(ex.remark);
+    if (!preservePinned && !preserveRemark) {
+      return dup.incoming;
+    }
+
+    return {
+      ...dup.incoming,
+      ...(preservePinned
+        ? {
+            pinned: ex.pinned,
+            ...(ex.pinnedAt !== undefined ? { pinnedAt: ex.pinnedAt } : {}),
+          }
+        : {}),
+      ...(preserveRemark ? { remark: ex.remark } : {}),
+    };
   });
 
   return [...updated, ...result.unique];

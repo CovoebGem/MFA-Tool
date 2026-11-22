@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { KeyRound, Loader2 } from "lucide-react";
 import { isValidBase32, validateOtpauthUrl } from "../lib/validators";
 import { parseOtpauthUrl } from "../lib/migration-parser";
 import type { OTPAccount, Group } from "../types";
 import { ParseError } from "../types";
 import { DEFAULT_GROUP_ID } from "../lib/group-manager";
 import GroupSelector from "./GroupSelector";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
 
 interface ManualAddFormProps {
   onAccountAdded: (accounts: OTPAccount[]) => Promise<void> | void;
@@ -26,6 +31,7 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
   const [name, setName] = useState("");
   const [issuer, setIssuer] = useState("");
   const [url, setUrl] = useState("");
+  const [remark, setRemark] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [selectedGroupId, setSelectedGroupId] = useState(DEFAULT_GROUP_ID);
   const [submitting, setSubmitting] = useState(false);
@@ -45,6 +51,7 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
     setName("");
     setIssuer("");
     setUrl("");
+    setRemark("");
     setErrors({});
     setSelectedGroupId(DEFAULT_GROUP_ID);
   };
@@ -102,6 +109,7 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
     }
 
     const now = Date.now();
+    const trimmedRemark = remark.trim();
     const account: OTPAccount = {
       id: crypto.randomUUID(),
       issuer: issuer.trim(),
@@ -115,6 +123,7 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
       createdAt: now,
       updatedAt: now,
       groupId: selectedGroupId,
+      ...(trimmedRemark ? { remark: trimmedRemark } : {}),
     };
 
     await submitAccount(account);
@@ -154,8 +163,12 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
       return;
     }
 
+    const trimmedRemark = remark.trim();
     account.groupId = selectedGroupId;
     account.updatedAt = account.updatedAt ?? account.createdAt;
+    if (trimmedRemark) {
+      account.remark = trimmedRemark;
+    }
 
     await submitAccount(account);
   };
@@ -170,185 +183,212 @@ export default function ManualAddForm({ onAccountAdded, groups }: ManualAddFormP
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full bg-white rounded-xl border border-gray-200 p-5">
-      {/* Tab 切换 */}
-      <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "manual"}
-          disabled={submitting}
-          onClick={() => switchMode("manual")}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-            mode === "manual"
-              ? "bg-white text-gray-800 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          手动输入
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "url"}
-          disabled={submitting}
-          onClick={() => switchMode("url")}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-            mode === "url"
-              ? "bg-white text-gray-800 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          otpauth:// URL
-        </button>
-      </div>
-
-      {mode === "manual" ? (
-        <div className="space-y-4" role="tabpanel">
-          {/* Secret */}
-          <div>
-            <label htmlFor="manual-secret" className="block text-sm font-medium text-gray-700 mb-1">
-              密钥 (Secret) <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="manual-secret"
-              type="text"
+    <Card className="w-full">
+      <CardHeader className="pb-3">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <KeyRound className="size-4 text-primary" aria-hidden="true" />
+            手动添加
+          </CardTitle>
+          <CardDescription className="mt-1">
+            输入 Base32 密钥或粘贴 otpauth:// 链接
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit}>
+          {/* Tab 切换 */}
+          <div
+            className="mb-4 grid grid-cols-2 gap-1 rounded-lg border border-border/70 bg-muted/80 p-1"
+            role="tablist"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "manual"}
               disabled={submitting}
-              value={secret}
-              onChange={(e) => {
-                if (submitting) return;
-                draftRevisionRef.current += 1;
-                setSecret(e.target.value);
-                if (errors.secret) setErrors((prev) => ({ ...prev, secret: undefined }));
-              }}
-              placeholder="输入 base32 编码密钥"
-              aria-invalid={!!errors.secret}
-              aria-describedby={errors.secret ? "secret-error" : undefined}
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed ${
-                errors.secret ? "border-red-400" : "border-gray-300"
-              }`}
-            />
-            {errors.secret && (
-              <p id="secret-error" className="mt-1 text-xs text-red-600" role="alert">
-                {errors.secret}
-              </p>
-            )}
+              onClick={() => switchMode("manual")}
+              className={cn(
+                "rounded-md py-1.5 text-xs font-medium transition-[color,background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer",
+                mode === "manual"
+                  ? "bg-card text-foreground shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              手动输入
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "url"}
+              disabled={submitting}
+              onClick={() => switchMode("url")}
+              className={cn(
+                "rounded-md py-1.5 text-xs font-medium transition-[color,background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer",
+                mode === "url"
+                  ? "bg-card text-foreground shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              otpauth:// URL
+            </button>
           </div>
 
-          {/* Name */}
-          <div>
-            <label htmlFor="manual-name" className="block text-sm font-medium text-gray-700 mb-1">
-              账户名称 (Name) <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="manual-name"
-              type="text"
-              disabled={submitting}
-              value={name}
-              onChange={(e) => {
-                if (submitting) return;
-                draftRevisionRef.current += 1;
-                setName(e.target.value);
-                if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
-              }}
-              placeholder="如邮箱地址"
-              aria-invalid={!!errors.name}
-              aria-describedby={errors.name ? "name-error" : undefined}
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed ${
-                errors.name ? "border-red-400" : "border-gray-300"
-              }`}
-            />
-            {errors.name && (
-              <p id="name-error" className="mt-1 text-xs text-red-600" role="alert">
-                {errors.name}
-              </p>
-            )}
-          </div>
+          {mode === "manual" ? (
+            <div className="flex flex-col gap-3.5" role="tabpanel">
+              <div>
+                <label htmlFor="manual-secret" className="mb-1.5 block text-xs font-medium text-foreground">
+                  密钥 (Secret) <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  id="manual-secret"
+                  type="text"
+                  disabled={submitting}
+                  value={secret}
+                  onChange={(e) => {
+                    if (submitting) return;
+                    draftRevisionRef.current += 1;
+                    setSecret(e.target.value);
+                    if (errors.secret) setErrors((prev) => ({ ...prev, secret: undefined }));
+                  }}
+                  placeholder="输入 base32 编码密钥"
+                  aria-invalid={!!errors.secret}
+                  aria-describedby={errors.secret ? "secret-error" : undefined}
+                  className="font-mono"
+                />
+                {errors.secret && (
+                  <p id="secret-error" className="mt-1 text-xs text-destructive" role="alert">
+                    {errors.secret}
+                  </p>
+                )}
+              </div>
 
-          {/* Issuer */}
-          <div>
-            <label htmlFor="manual-issuer" className="block text-sm font-medium text-gray-700 mb-1">
-              服务商 (Issuer)
-            </label>
-            <input
-              id="manual-issuer"
-              type="text"
-              disabled={submitting}
-              value={issuer}
-              onChange={(e) => {
-                if (submitting) return;
-                draftRevisionRef.current += 1;
-                setIssuer(e.target.value);
-              }}
-              placeholder="如 Google、GitHub"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed"
-            />
-          </div>
+              <div>
+                <label htmlFor="manual-name" className="mb-1.5 block text-xs font-medium text-foreground">
+                  账户名称 (Name) <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  id="manual-name"
+                  type="text"
+                  disabled={submitting}
+                  value={name}
+                  onChange={(e) => {
+                    if (submitting) return;
+                    draftRevisionRef.current += 1;
+                    setName(e.target.value);
+                    if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
+                  placeholder="如邮箱地址"
+                  aria-invalid={!!errors.name}
+                  aria-describedby={errors.name ? "name-error" : undefined}
+                />
+                {errors.name && (
+                  <p id="name-error" className="mt-1 text-xs text-destructive" role="alert">
+                    {errors.name}
+                  </p>
+                )}
+              </div>
 
-          {/* Group Selector */}
-          {groups && groups.length > 0 && (
-            <div>
-              <label htmlFor="manual-group" className="block text-sm font-medium text-gray-700 mb-1">
-                分组
-              </label>
-              <GroupSelector
-                groups={groups}
-                selectedGroupId={selectedGroupId}
-                onSelect={(groupId) => {
-                  if (submitting) return;
-                  draftRevisionRef.current += 1;
-                  setSelectedGroupId(groupId);
-                }}
-              />
+              <div>
+                <label htmlFor="manual-issuer" className="mb-1.5 block text-xs font-medium text-foreground">
+                  服务商 (Issuer)
+                </label>
+                <Input
+                  id="manual-issuer"
+                  type="text"
+                  disabled={submitting}
+                  value={issuer}
+                  onChange={(e) => {
+                    if (submitting) return;
+                    draftRevisionRef.current += 1;
+                    setIssuer(e.target.value);
+                  }}
+                  placeholder="如 Google、GitHub"
+                />
+              </div>
+
+              {groups && groups.length > 0 && (
+                <div>
+                  <label htmlFor="manual-group" className="mb-1.5 block text-xs font-medium text-foreground">
+                    分组
+                  </label>
+                  <GroupSelector
+                    groups={groups}
+                    selectedGroupId={selectedGroupId}
+                    onSelect={(groupId) => {
+                      if (submitting) return;
+                      draftRevisionRef.current += 1;
+                      setSelectedGroupId(groupId);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3.5" role="tabpanel">
+              <div>
+                <label htmlFor="otpauth-url" className="mb-1.5 block text-xs font-medium text-foreground">
+                  otpauth:// URL <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  id="otpauth-url"
+                  type="text"
+                  disabled={submitting}
+                  value={url}
+                  onChange={(e) => {
+                    if (submitting) return;
+                    draftRevisionRef.current += 1;
+                    setUrl(e.target.value);
+                    if (errors.url) setErrors((prev) => ({ ...prev, url: undefined }));
+                  }}
+                  placeholder="otpauth://totp/name?secret=xxx&issuer=xxx"
+                  aria-invalid={!!errors.url}
+                  aria-describedby={errors.url ? "url-error" : undefined}
+                  className="font-mono"
+                />
+                {errors.url && (
+                  <p id="url-error" className="mt-1 text-xs text-destructive" role="alert">
+                    {errors.url}
+                  </p>
+                )}
+              </div>
             </div>
           )}
-        </div>
-      ) : (
-        <div className="space-y-4" role="tabpanel">
-          <div>
-            <label htmlFor="otpauth-url" className="block text-sm font-medium text-gray-700 mb-1">
-              otpauth:// URL <span className="text-red-500">*</span>
+
+          <div className="mt-3.5">
+            <label htmlFor="manual-remark" className="mb-1.5 block text-xs font-medium text-foreground">
+              备注 (Remark)
             </label>
-            <input
-              id="otpauth-url"
+            <Input
+              id="manual-remark"
               type="text"
               disabled={submitting}
-              value={url}
+              value={remark}
               onChange={(e) => {
                 if (submitting) return;
                 draftRevisionRef.current += 1;
-                setUrl(e.target.value);
-                if (errors.url) setErrors((prev) => ({ ...prev, url: undefined }));
+                setRemark(e.target.value);
               }}
-              placeholder="otpauth://totp/name?secret=xxx&issuer=xxx"
-              aria-invalid={!!errors.url}
-              aria-describedby={errors.url ? "url-error" : undefined}
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed ${
-                errors.url ? "border-red-400" : "border-gray-300"
-              }`}
+              placeholder="可选，用于标识别的内容"
             />
-            {errors.url && (
-              <p id="url-error" className="mt-1 text-xs text-red-600" role="alert">
-                {errors.url}
-              </p>
-            )}
           </div>
-        </div>
-      )}
 
-      {errors.submit && (
-        <p className="mt-3 text-xs text-red-600" role="alert">
-          {errors.submit}
-        </p>
-      )}
+          {errors.submit && (
+            <p className="mt-3 text-xs text-destructive" role="alert">
+              {errors.submit}
+            </p>
+          )}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="mt-5 w-full py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-      >
-        {submitting ? "添加中..." : "添加账户"}
-      </button>
-    </form>
+          <Button
+            type="submit"
+            disabled={submitting}
+            className="mt-5 w-full"
+          >
+            {submitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {submitting ? "添加中..." : "添加账户"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

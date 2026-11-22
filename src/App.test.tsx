@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   setAccountsMock: vi.fn(),
   addNewAccountsMock: vi.fn().mockResolvedValue(undefined),
   batchDeleteAccountsMock: vi.fn().mockResolvedValue(undefined),
+  batchSetPinnedMock: vi.fn().mockResolvedValue(undefined),
   saveGroupsMock: vi.fn().mockResolvedValue(undefined),
   saveAccountsMock: vi.fn().mockResolvedValue(undefined),
   toastMock: vi.fn(),
@@ -89,6 +90,8 @@ vi.mock("./hooks/useAccounts", () => ({
     deleteAccount: vi.fn(),
     batchDeleteAccounts: mocks.batchDeleteAccountsMock,
     editAccount: vi.fn(),
+    togglePinAccount: vi.fn(),
+    batchSetPinned: mocks.batchSetPinnedMock,
     batchMoveToGroup: vi.fn(),
     refreshAccounts: vi.fn(),
   }),
@@ -236,6 +239,7 @@ describe("App", () => {
     vi.clearAllMocks();
     mocks.addNewAccountsMock.mockResolvedValue(undefined);
     mocks.batchDeleteAccountsMock.mockResolvedValue(undefined);
+    mocks.batchSetPinnedMock.mockResolvedValue(undefined);
     mocks.saveGroupsMock.mockResolvedValue(undefined);
     mocks.saveAccountsMock.mockResolvedValue(undefined);
     mocks.accountsState = [];

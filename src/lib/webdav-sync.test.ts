@@ -132,4 +132,49 @@ describe("mergeWebDavSyncData", () => {
       }),
     ]);
   });
+
+  it("按较新的 updatedAt 同步置顶和取消置顶状态", () => {
+    const groups = [
+      createGroup({ id: "default", name: "默认", isDefault: true, createdAt: 0, updatedAt: 0 }),
+    ];
+
+    const localPinned = [
+      createAccount({
+        id: "acc-pin",
+        secret: "SECRET-PIN",
+        pinned: true,
+        pinnedAt: 500,
+        updatedAt: 500,
+      }),
+    ];
+    const remoteUnpinnedOlder = [
+      createAccount({
+        id: "acc-pin",
+        secret: "SECRET-PIN",
+        pinned: false,
+        updatedAt: 200,
+      }),
+    ];
+
+    const mergedKeepPin = mergeWebDavSyncData(localPinned, groups, remoteUnpinnedOlder, groups);
+    expect(mergedKeepPin.accounts[0]).toMatchObject({
+      id: "acc-pin",
+      pinned: true,
+      pinnedAt: 500,
+      updatedAt: 500,
+    });
+
+    const remoteUnpinnedNewer = [
+      createAccount({
+        id: "acc-pin",
+        secret: "SECRET-PIN",
+        pinned: false,
+        updatedAt: 900,
+      }),
+    ];
+    const mergedUnpin = mergeWebDavSyncData(localPinned, groups, remoteUnpinnedNewer, groups);
+    expect(mergedUnpin.accounts[0].pinned).toBe(false);
+    expect(mergedUnpin.accounts[0].pinnedAt).toBeUndefined();
+    expect(mergedUnpin.accounts[0].updatedAt).toBe(900);
+  });
 });

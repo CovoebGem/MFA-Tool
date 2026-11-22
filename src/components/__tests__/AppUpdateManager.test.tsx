@@ -581,4 +581,28 @@ describe("AppUpdateManager", () => {
     });
     expect(document.activeElement).toBe(topBtn);
   });
+
+  it("支持 sidebar 模式在展开与收起态之间切换且不重复检查更新", async () => {
+    checkAppUpdateMock.mockResolvedValue({
+      source: "mirror",
+      fallbackFromMirror: false,
+      update: null,
+    });
+
+    const { rerender } = render(
+      <AppUpdateManager onToast={vi.fn()} variant="sidebar" collapsed={false} />,
+    );
+
+    const expandedBtn = await screen.findByRole("button", { name: "检查更新" });
+    expect(expandedBtn.className).toContain("w-full");
+    expect(expandedBtn).toHaveTextContent("检查更新");
+    expect(checkAppUpdateMock).toHaveBeenCalledTimes(1);
+
+    rerender(<AppUpdateManager onToast={vi.fn()} variant="sidebar" collapsed />);
+
+    const collapsedBtn = screen.getByRole("button", { name: "检查更新" });
+    expect(collapsedBtn.className).toContain("size-10");
+    expect(collapsedBtn).toHaveAttribute("title", "检查更新");
+    expect(checkAppUpdateMock).toHaveBeenCalledTimes(1);
+  });
 });

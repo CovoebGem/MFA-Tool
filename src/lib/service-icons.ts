@@ -78,29 +78,55 @@ export const serviceIcons: Record<string, string> = {
   cloudns: "https://www.cloudns.net/favicon.ico",
 };
 
+const iconUrlCache = new Map<string, string | null>();
+const fallbackIconCache = new Map<string, string>();
+const failedIconUrls = new Set<string>();
+
+export function hasServiceIconFailed(url: string): boolean {
+  return failedIconUrls.has(url);
+}
+
+export function markServiceIconFailed(url: string): void {
+  failedIconUrls.add(url);
+}
+
 export function getServiceIconUrl(issuer: string): string | null {
   if (!issuer) return null;
   const normalizedIssuer = issuer.toLowerCase().trim();
-  
-  if (serviceIcons[normalizedIssuer]) {
-    return serviceIcons[normalizedIssuer];
+  if (!normalizedIssuer) return null;
+
+  if (iconUrlCache.has(normalizedIssuer)) {
+    return iconUrlCache.get(normalizedIssuer) ?? null;
   }
-  
-  for (const [key, url] of Object.entries(serviceIcons)) {
-    if (normalizedIssuer.includes(key) || key.includes(normalizedIssuer)) {
-      return url;
+
+  let matched: string | null = serviceIcons[normalizedIssuer] ?? null;
+
+  if (!matched) {
+    for (const [key, url] of Object.entries(serviceIcons)) {
+      if (normalizedIssuer.includes(key) || key.includes(normalizedIssuer)) {
+        matched = url;
+        break;
+      }
     }
   }
-  
-  return null;
+
+  iconUrlCache.set(normalizedIssuer, matched);
+  return matched;
 }
 
 export function getFallbackIcon(issuer: string): string {
   const initial = issuer?.charAt(0)?.toUpperCase() || "?";
-  return `data:image/svg+xml,${encodeURIComponent(`
+  const cached = fallbackIconCache.get(initial);
+  if (cached) {
+    return cached;
+  }
+
+  const dataUrl = `data:image/svg+xml,${encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
       <rect width="32" height="32" rx="6" fill="#6366f1"/>
       <text x="16" y="22" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="16" font-weight="600">${initial}</text>
     </svg>
   `)}`;
+  fallbackIconCache.set(initial, dataUrl);
+  return dataUrl;
 }

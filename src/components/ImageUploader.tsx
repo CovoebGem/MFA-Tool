@@ -1,6 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { AlertCircle, Loader2, QrCode, Upload } from "lucide-react";
 import { decodeQRFromFile, decodeQRFromClipboard } from "../lib/qr-decoder";
 import { parseQRContent } from "../lib/migration-parser";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Kbd } from "./ui/kbd";
+import { cn } from "../lib/utils";
 import type { OTPAccount } from "../types";
 import { QRDecodeError, ParseError } from "../types";
 
@@ -156,88 +161,82 @@ export default function ImageUploader({ onAccountsDecoded }: ImageUploaderProps)
   }, [processFiles, processClipboard]);
 
   return (
-    <div className="w-full">
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label="上传二维码图片，支持点击、拖拽或 Ctrl+V 粘贴"
-        onClick={handleClick}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleClick();
-          }
-        }}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={`
-          relative flex flex-col items-center justify-center
-          w-full min-h-[180px] p-6
-          border-2 border-dashed rounded-xl
-          cursor-pointer transition-colors duration-200
-          ${isDragOver
-            ? "border-blue-500 bg-blue-50"
-            : "border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50"
-          }
-          ${loading ? "pointer-events-none opacity-60" : ""}
-        `}
-      >
-        {loading ? (
-          <div className="flex flex-col items-center gap-2">
-            <svg
-              className="animate-spin h-8 w-8 text-blue-500"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <span className="text-sm text-gray-500">正在解码...</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-gray-500">
-            <svg
-              className="h-10 w-10"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
-              />
-            </svg>
-            <p className="text-sm font-medium">点击选择或拖拽二维码图片到此处</p>
-            <p className="text-xs text-gray-400">支持 Ctrl+V 粘贴图片 · PNG / JPG / GIF</p>
-          </div>
-        )}
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/bmp,image/webp"
-          multiple
-          onChange={handleFileChange}
-          className="hidden"
-          aria-hidden="true"
-        />
-      </div>
-
-      {error && (
-        <div
-          role="alert"
-          className="mt-3 px-4 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg"
-        >
-          {error}
+    <Card className="w-full">
+      <CardHeader className="pb-3">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <QrCode className="size-4 text-primary" aria-hidden="true" />
+            二维码导入
+          </CardTitle>
+          <CardDescription className="mt-1">
+            支持单图、多图及 Google Authenticator 迁移码
+          </CardDescription>
         </div>
-      )}
-    </div>
+      </CardHeader>
+      <CardContent>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="上传二维码图片，支持点击、拖拽或 Ctrl+V 粘贴"
+          onClick={handleClick}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleClick();
+            }
+          }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={cn(
+            "relative flex min-h-[192px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-[border-color,background-color] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+            isDragOver
+              ? "border-primary bg-primary/5"
+              : "border-border bg-muted/30 hover:border-primary/40 hover:bg-muted/55",
+            loading && "pointer-events-none opacity-60",
+          )}
+        >
+          {loading ? (
+            <div className="flex flex-col items-center gap-2.5">
+              <Loader2 className="size-7 animate-spin text-primary" aria-hidden="true" />
+              <span className="text-sm text-muted-foreground">正在解码...</span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2.5">
+              <div className="flex size-11 items-center justify-center rounded-xl border border-border/80 bg-card text-muted-foreground shadow-2xs">
+                <Upload className="size-5" aria-hidden="true" />
+              </div>
+              <p className="text-sm font-medium text-foreground">
+                点击选择或拖拽二维码图片到此处
+              </p>
+              <p className="flex flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                <span>支持</span>
+                <Kbd>Ctrl+V</Kbd>
+                <span>粘贴图片 · PNG / JPG / GIF</span>
+              </p>
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/bmp,image/webp"
+            multiple
+            onChange={handleFileChange}
+            className="hidden"
+            aria-hidden="true"
+          />
+        </div>
+
+        {error && (
+          <Alert variant="destructive" role="alert" className="mt-3">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <AlertDescription className="whitespace-pre-line opacity-100">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
   );
 }

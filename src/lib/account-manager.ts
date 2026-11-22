@@ -60,12 +60,24 @@ export function addAccounts(
 export function updateAccount(
   accounts: OTPAccount[],
   id: string,
-  updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>,
+  updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret" | "remark">>,
 ): OTPAccount[] {
   const now = Date.now();
-  return accounts.map((a) =>
-    a.id === id ? { ...a, ...updates, updatedAt: now } : a,
-  );
+  return accounts.map((a) => {
+    if (a.id !== id) {
+      return a;
+    }
+    const next: OTPAccount = { ...a, ...updates, updatedAt: now };
+    if ("remark" in updates) {
+      const trimmedRemark = typeof updates.remark === "string" ? updates.remark.trim() : "";
+      if (trimmedRemark) {
+        next.remark = trimmedRemark;
+      } else {
+        delete next.remark;
+      }
+    }
+    return next;
+  });
 }
 
 /**
@@ -131,6 +143,102 @@ export function moveAccountsToGroup(
       ? { ...account, groupId, updatedAt: now }
       : account,
   );
+}
+
+/**
+ * 切换或设置账户置顶状态
+ * @param accounts - 现有账户列表
+ * @param id - 目标账户 ID
+ * @param pinned - 可选显式目标状态，未传时按当前状态取反
+ * @returns 更新后的账户列表（无变化时返回原引用）
+ */
+export function toggleAccountPin(
+  accounts: OTPAccount[],
+  id: string,
+  pinned?: boolean,
+): OTPAccount[] {
+  const target = accounts.find((account) => account.id === id);
+  if (!target) {
+    return accounts;
+  }
+
+  const nextPinned = pinned ?? !target.pinned;
+  if (nextPinned === Boolean(target.pinned)) {
+    return accounts;
+  }
+
+  const now = Date.now();
+  return accounts.map((account) => {
+    if (account.id !== id) {
+      return account;
+    }
+
+    if (nextPinned) {
+      return {
+        ...account,
+        pinned: true,
+        pinnedAt: now,
+        updatedAt: now,
+      };
+    }
+
+    const { pinnedAt: omittedPinnedAt, ...rest } = account;
+    void omittedPinnedAt;
+    return {
+      ...rest,
+      pinned: false,
+      updatedAt: now,
+    };
+  });
+}
+
+/**
+ * 批量设置账户置顶或取消置顶状态
+ * @param accounts - 现有账户列表
+ * @param accountIds - 目标账户 ID 集合
+ * @param pinned - 目标置顶状态
+ * @returns 更新后的账户列表（无任何账户状态变化时返回原引用）
+ */
+export function setAccountsPinned(
+  accounts: OTPAccount[],
+  accountIds: Iterable<string>,
+  pinned: boolean,
+): OTPAccount[] {
+  const idSet = new Set(accountIds);
+  if (idSet.size === 0) {
+    return accounts;
+  }
+
+  const hasChanges = accounts.some(
+    (account) => idSet.has(account.id) && Boolean(account.pinned) !== pinned,
+  );
+  if (!hasChanges) {
+    return accounts;
+  }
+
+  const now = Date.now();
+  return accounts.map((account) => {
+    if (!idSet.has(account.id) || Boolean(account.pinned) === pinned) {
+      return account;
+    }
+
+    if (pinned) {
+      return {
+        ...account,
+        pinned: true,
+        pinnedAt: now,
+        updatedAt: now,
+      };
+    }
+
+    const { pinnedAt: omittedPinnedAt, ...rest } = account;
+    void omittedPinnedAt;
+    return {
+      ...rest,
+      pinned: false,
+      updatedAt: now,
+    };
+  });
 }
 
 export { DATA_FILE };

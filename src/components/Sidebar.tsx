@@ -1,8 +1,20 @@
 import type { Page } from "../types";
 import type { ReactNode } from "react";
 import type { Theme } from "../lib/theme-store";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Cloud,
+  FolderKanban,
+  Home,
+  KeyRound,
+  ShieldCheck,
+  Timer,
+} from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import LocaleToggle from "./LocaleToggle";
+import { Separator } from "./ui/separator";
+import { cn } from "../lib/utils";
 import { useI18n } from "../contexts/I18nContext";
 
 interface SidebarProps {
@@ -13,146 +25,7 @@ interface SidebarProps {
   viewportHeight?: string;
   theme?: Theme;
   onThemeChange?: (theme: Theme) => void;
-}
-
-function HomeIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="m2.25 12 8.954-8.955a1.126 1.126 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
-      />
-    </svg>
-  );
-}
-
-function UserIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
-      />
-    </svg>
-  );
-}
-
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z"
-      />
-    </svg>
-  );
-}
-
-function ClockIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-      />
-    </svg>
-  );
-}
-
-function CloudIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M2.25 15.75A4.5 4.5 0 0 1 6.75 11.25h.258a6 6 0 1 1 11.728 1.5 3.75 3.75 0 0 1 .014 7.5H6.75a4.5 4.5 0 0 1-4.5-4.5Z"
-      />
-    </svg>
-  );
-}
-
-function ChevronLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15.75 19.5 8.25 12l7.5-7.5"
-      />
-    </svg>
-  );
-}
-
-function ChevronRightIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="m8.25 4.5 7.5 7.5-7.5 7.5"
-      />
-    </svg>
-  );
+  footerSlot?: ReactNode;
 }
 
 export default function Sidebar({
@@ -163,69 +36,104 @@ export default function Sidebar({
   viewportHeight = "100vh",
   theme,
   onThemeChange,
+  footerSlot,
 }: SidebarProps) {
   const { t } = useI18n();
 
   const navItems: { page: Page; icon: (props: { className?: string }) => ReactNode; labelKey: string }[] = [
-    { page: "home", icon: HomeIcon, labelKey: "nav.home" },
-    { page: "accounts", icon: UserIcon, labelKey: "nav.accounts" },
-    { page: "groups", icon: FolderIcon, labelKey: "nav.groups" },
-    { page: "sync", icon: CloudIcon, labelKey: "nav.sync" },
-    { page: "temp", icon: ClockIcon, labelKey: "nav.temp" },
+    { page: "home", icon: (p) => <Home {...p} />, labelKey: "nav.home" },
+    { page: "accounts", icon: (p) => <KeyRound {...p} />, labelKey: "nav.accounts" },
+    { page: "groups", icon: (p) => <FolderKanban {...p} />, labelKey: "nav.groups" },
+    { page: "sync", icon: (p) => <Cloud {...p} />, labelKey: "nav.sync" },
+    { page: "temp", icon: (p) => <Timer {...p} />, labelKey: "nav.temp" },
   ];
 
   return (
     <nav
-      className={`fixed left-0 top-0 flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-6 transition-[width] duration-200 ease-out ${
-        collapsed ? "w-16 items-center" : "w-48"
-      }`}
+      className={cn(
+        "fixed left-0 top-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground py-4 transition-[width] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
+        collapsed ? "w-16 items-center px-2" : "w-56 px-3",
+      )}
       style={{ height: viewportHeight }}
       aria-label="主导航"
     >
-      <div className={`flex flex-1 flex-col ${collapsed ? "items-center" : "px-3"}`}>
-        {navItems.map(({ page, icon: Icon, labelKey }) => {
+      <div
+        className={cn(
+          "flex items-center gap-2.5 px-1.5 pb-1",
+          collapsed && "justify-center px-0",
+        )}
+      >
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs">
+          <ShieldCheck className="size-4.5" aria-hidden="true" />
+        </div>
+        {!collapsed && (
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold tracking-tight text-foreground">
+              MFA Tool
+            </p>
+            <p className="truncate text-[11px] text-muted-foreground">
+              2FA Vault
+            </p>
+          </div>
+        )}
+      </div>
+
+      <Separator className="my-3" />
+
+      <div className={cn("flex flex-1 flex-col gap-1", collapsed && "items-center w-full")}>
+        {navItems.map(({ page, icon: renderIcon, labelKey }) => {
           const isActive = currentPage === page;
           const label = t(labelKey);
           return (
             <button
               key={page}
+              type="button"
               onClick={() => onNavigate(page)}
-              className={`mb-2 flex items-center rounded-lg transition-colors ${
+              className={cn(
+                "flex items-center rounded-lg text-sm transition-[color,background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] cursor-pointer",
                 collapsed
-                  ? "w-12 justify-center px-1 py-2"
-                  : "w-full gap-3 px-3 py-2"
-              } ${
+                  ? "size-10 justify-center"
+                  : "w-full gap-2.5 px-3 py-2",
                 isActive
-                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                  : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100"
-              }`}
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-2xs"
+                  : "text-muted-foreground hover:bg-accent/70 hover:text-foreground",
+              )}
               aria-current={isActive ? "page" : undefined}
               title={label}
             >
-              <Icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span className="text-sm">{label}</span>}
+              {renderIcon({ className: "size-4.5 shrink-0" })}
+              {!collapsed && <span className="truncate">{label}</span>}
             </button>
           );
         })}
       </div>
 
-      <div className={`mt-auto ${collapsed ? "flex flex-col items-center gap-2" : "px-3 space-y-2"}`}>
+      <div className={cn("mt-auto w-full", collapsed ? "flex flex-col items-center gap-2" : "flex flex-col gap-2.5")}>
+        <Separator />
         {!collapsed && (
           <div className="flex w-full flex-col gap-2">
             <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
             <LocaleToggle />
           </div>
         )}
+        {footerSlot}
         <button
+          type="button"
           onClick={onToggleCollapse}
-          className="flex w-full items-center justify-center rounded-lg px-2 py-2 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100"
+          className={cn(
+            "flex items-center justify-center rounded-lg py-2 text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-accent/70 hover:text-foreground active:scale-[0.98] cursor-pointer",
+            collapsed ? "size-10" : "w-full gap-2 px-2 text-xs",
+          )}
           aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
           title={collapsed ? "展开侧边栏" : "收起侧边栏"}
         >
           {collapsed ? (
-            <ChevronRightIcon className="h-5 w-5" />
+            <ChevronRight className="size-4.5" aria-hidden="true" />
           ) : (
-            <ChevronLeftIcon className="h-5 w-5" />
+            <>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              <span>收起侧边栏</span>
+            </>
           )}
         </button>
       </div>
