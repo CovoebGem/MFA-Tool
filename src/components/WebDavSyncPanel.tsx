@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, CheckCircle2, Cloud, KeyRound, ShieldAlert } from "lucide-react";
 import type { Group, OTPAccount } from "../types";
 import { exportToJSON, parseBackupJSON } from "../lib/backup";
 import {
@@ -18,6 +19,11 @@ import {
   type WebDavConfig,
 } from "../lib/webdav-store";
 import { mergeWebDavSyncData } from "../lib/webdav-sync";
+import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "./ui/frame";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 type BusyAction =
   | "testing"
@@ -40,38 +46,6 @@ interface WebDavSyncPanelProps {
   ) => Promise<{ accounts: OTPAccount[]; groups: Group[] }>;
   onGetLatestSnapshot?: () => Promise<{ accounts: OTPAccount[]; groups: Group[] }>;
   onToast: (message: string, type: "success" | "error") => void;
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
-  );
-}
-
-function ArrowDownTrayIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-    </svg>
-  );
-}
-
-function ArrowUpTrayIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-    </svg>
-  );
-}
-
-function ArrowsRightLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5h13.5m0 0-3-3m3 3-3 3m-12 6H19.5m0 0-3-3m3 3-3 3" />
-    </svg>
-  );
 }
 
 function validateConfig(draft: WebDavConfig): WebDavConfig {
@@ -112,24 +86,21 @@ function validateConfig(draft: WebDavConfig): WebDavConfig {
   };
 }
 
-function getStatusMeta(state: ConnectionState, hasConfig: boolean) {
+function getStatusMeta(state: ConnectionState, hasConfig: boolean): {
+  label: string;
+  variant: "success" | "destructive" | "secondary";
+} {
   if (state === "connected") {
-    return {
-      label: "已连接",
-      className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
-    };
+    return { label: "已连接", variant: "success" };
   }
 
   if (state === "failed") {
-    return {
-      label: "连接失败",
-      className: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
-    };
+    return { label: "连接失败", variant: "destructive" };
   }
 
   return {
     label: hasConfig ? "未测试" : "未连接",
-    className: "border-gray-200 bg-white text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300",
+    variant: "secondary",
   };
 }
 
@@ -330,195 +301,200 @@ export default function WebDavSyncPanel({
   };
 
   return (
-    <div className="space-y-6 px-4 py-5 md:px-6">
-      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex flex-col gap-4 border-b border-gray-200 pb-5 dark:border-gray-700 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">WebDAV 配置</h2>
-              <span className={`rounded-full border px-3 py-1 text-sm font-medium ${statusMeta.className}`}>
-                {statusMeta.label}
-              </span>
+    <div className="flex flex-col gap-6 px-6 py-5">
+      <Frame>
+        <FrameHeader>
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Cloud className="size-4 text-primary" aria-hidden="true" />
+              <FrameTitle className="text-base">WebDAV 配置</FrameTitle>
+              <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
               {passwordSaved && (
-                <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                <Badge variant="info">
+                  <KeyRound className="size-3" aria-hidden="true" />
                   已保存密码
-                </span>
+                </Badge>
               )}
             </div>
-            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-              地址填服务根路径，路径填同步目录或具体 JSON 文件名。目录模式下会自动补 `sync.json`。
-            </p>
+            <FrameDescription>
+              地址填服务根路径，路径填同步目录或具体 JSON 文件名。目录模式下会自动补 sync.json。
+            </FrameDescription>
           </div>
           {resolvedFileUrl && (
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300 md:max-w-md">
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
-                目标文件
-              </div>
-              <div className="mt-2 break-all font-mono text-xs leading-6">{resolvedFileUrl}</div>
+            <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground md:max-w-sm">
+              <span className="font-medium text-foreground">目标文件：</span>
+              <span className="break-all font-mono">{resolvedFileUrl}</span>
             </div>
           )}
-        </div>
+        </FrameHeader>
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        <FramePanel className="flex flex-col gap-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="webdav-base-url" className="mb-1.5 block text-xs font-medium text-foreground">
+                WebDAV 地址
+              </label>
+              <Input
+                id="webdav-base-url"
+                type="url"
+                value={draft.baseUrl}
+                onChange={(event) => updateDraft((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                placeholder="https://dav.example.com/remote.php/dav/files/you"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="webdav-path" className="mb-1.5 block text-xs font-medium text-foreground">
+                WebDAV 路径
+              </label>
+              <Input
+                id="webdav-path"
+                type="text"
+                value={draft.path}
+                onChange={(event) => updateDraft((prev) => ({ ...prev, path: event.target.value }))}
+                placeholder="/MFA-Tool/"
+                className="font-mono"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="webdav-username" className="mb-1.5 block text-xs font-medium text-foreground">
+                用户名
+              </label>
+              <Input
+                id="webdav-username"
+                type="text"
+                value={draft.username}
+                onChange={(event) => updateDraft((prev) => ({ ...prev, username: event.target.value }))}
+                placeholder="admin"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="webdav-password" className="mb-1.5 block text-xs font-medium text-foreground">
+                密码
+              </label>
+              <Input
+                id="webdav-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={passwordSaved ? "留空时使用系统钥匙串中的已保存密码" : "输入本次操作要用的密码"}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-4 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-0.5">
+              <p>保存配置时，如果密码输入框有内容，会一起写入系统钥匙串。</p>
+              <p>不想改密码时可以留空，后续同步会继续使用已保存的密码。</p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 shrink-0">
+              <Button
+                variant="outline"
+                onClick={handleTestConnection}
+                disabled={busyAction !== null}
+              >
+                {busyAction === "testing" ? "测试中..." : "测试连接"}
+              </Button>
+              <Button
+                onClick={handleSaveConfig}
+                disabled={busyAction !== null}
+              >
+                {busyAction === "saving" ? "保存中..." : "保存配置"}
+              </Button>
+            </div>
+          </div>
+        </FramePanel>
+      </Frame>
+
+      <Frame>
+        <FrameHeader>
           <div>
-            <label htmlFor="webdav-base-url" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-100">
-              WebDAV 地址
-            </label>
-            <input
-              id="webdav-base-url"
-              type="url"
-              value={draft.baseUrl}
-              onChange={(event) => updateDraft((prev) => ({ ...prev, baseUrl: event.target.value }))}
-              placeholder="https://dav.example.com/remote.php/dav/files/you"
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-blue-400 focus:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:bg-gray-800"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="webdav-path" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-100">
-              WebDAV 路径
-            </label>
-            <input
-              id="webdav-path"
-              type="text"
-              value={draft.path}
-              onChange={(event) => updateDraft((prev) => ({ ...prev, path: event.target.value }))}
-              placeholder="/MFA-Tool/"
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-blue-400 focus:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:bg-gray-800"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="webdav-username" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-100">
-              用户名
-            </label>
-            <input
-              id="webdav-username"
-              type="text"
-              value={draft.username}
-              onChange={(event) => updateDraft((prev) => ({ ...prev, username: event.target.value }))}
-              placeholder="admin"
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-blue-400 focus:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:bg-gray-800"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="webdav-password" className="mb-2 block text-sm font-semibold text-gray-800 dark:text-gray-100">
-              密码
-            </label>
-            <input
-              id="webdav-password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder={passwordSaved ? "留空时使用系统钥匙串中的已保存密码" : "输入本次操作要用的密码"}
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-blue-400 focus:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:bg-gray-800"
-            />
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-col gap-3 text-sm text-gray-500 dark:text-gray-400 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1">
-            <p>保存配置时，如果密码输入框有内容，会一起写入系统钥匙串。</p>
-            <p>不想改密码时可以留空，后续同步会继续使用已保存的密码。</p>
-          </div>
-          <div className="flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={handleTestConnection}
-              disabled={busyAction !== null}
-              className="rounded-2xl bg-gray-100 px-6 py-3 text-base font-semibold text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
-            >
-              {busyAction === "testing" ? "测试中..." : "测试连接"}
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveConfig}
-              disabled={busyAction !== null}
-              className="rounded-2xl bg-blue-500 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busyAction === "saving" ? "保存中..." : "保存配置"}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">同步操作</h3>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            <FrameTitle className="text-base">同步操作</FrameTitle>
+            <FrameDescription>
               建议第一次先测试连接，再执行同步。当前删除不会跨端传播。
-            </p>
+            </FrameDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleClearSavedPassword}
               disabled={busyAction !== null || !passwordSaved}
-              className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               清除已保存密码
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleClearConfig}
               disabled={busyAction !== null}
-              className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               清空配置
-            </button>
+            </Button>
           </div>
-        </div>
+        </FrameHeader>
 
-        <div className="mt-6 grid gap-3 xl:grid-cols-3">
-          <button
-            type="button"
-            onClick={handleSyncNow}
-            disabled={busyAction !== null || !hasConfig}
-            className="flex items-center justify-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-left text-base font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200 dark:hover:bg-blue-500/15"
-          >
-            <ArrowsRightLeftIcon className="h-5 w-5" />
-            {busyAction === "syncing" ? "同步中..." : "立即同步"}
-          </button>
+        <FramePanel className="flex flex-col gap-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <Button
+              variant="soft"
+              onClick={handleSyncNow}
+              disabled={busyAction !== null || !hasConfig}
+              className="h-11 justify-center text-sm font-semibold"
+            >
+              <ArrowLeftRight className="size-4" aria-hidden="true" />
+              {busyAction === "syncing" ? "同步中..." : "立即同步"}
+            </Button>
 
-          <button
-            type="button"
-            onClick={handlePullAndMerge}
-            disabled={busyAction !== null || !hasConfig}
-            className="flex items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-left text-base font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-100 dark:hover:bg-gray-700"
-          >
-            <ArrowDownTrayIcon className="h-5 w-5" />
-            {busyAction === "pulling" ? "拉取中..." : "拉取并合并"}
-          </button>
+            <Button
+              variant="outline"
+              onClick={handlePullAndMerge}
+              disabled={busyAction !== null || !hasConfig}
+              className="h-11 justify-center text-sm font-semibold"
+            >
+              <ArrowDownToLine className="size-4" aria-hidden="true" />
+              {busyAction === "pulling" ? "拉取中..." : "拉取并合并"}
+            </Button>
 
-          <button
-            type="button"
-            onClick={handlePushToCloud}
-            disabled={busyAction !== null || !hasConfig}
-            className="flex items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-left text-base font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-100 dark:hover:bg-gray-700"
-          >
-            <ArrowUpTrayIcon className="h-5 w-5" />
-            {busyAction === "pushing" ? "上传中..." : "上传本地数据"}
-          </button>
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
-          <div className="flex items-center gap-2 font-medium text-gray-800 dark:text-gray-100">
-            <CheckIcon className="h-4 w-4" />
-            当前同步策略
+            <Button
+              variant="outline"
+              onClick={handlePushToCloud}
+              disabled={busyAction !== null || !hasConfig}
+              className="h-11 justify-center text-sm font-semibold"
+            >
+              <ArrowUpFromLine className="size-4" aria-hidden="true" />
+              {busyAction === "pushing" ? "上传中..." : "上传本地数据"}
+            </Button>
           </div>
-          <p className="mt-2 leading-6">
-            先读取云端，再按最近更新时间合并，最后把合并结果回写到本地和云端。
-          </p>
-        </div>
 
-        {usingInsecureHttp && (
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-            当前使用的是 HTTP 明文传输。同步的是 2FA 密钥，建议改成 HTTPS 后再长期使用。
-          </div>
-        )}
-      </section>
+          <Alert>
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+            <div>
+              <AlertTitle className="text-xs">当前同步策略</AlertTitle>
+              <AlertDescription className="mt-0.5">
+                先读取云端，再按最近更新时间合并，最后把合并结果回写到本地和云端。
+              </AlertDescription>
+            </div>
+          </Alert>
+
+          {usingInsecureHttp && (
+            <Alert variant="warning">
+              <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <div>
+                <AlertTitle className="flex items-center gap-1.5 text-xs">
+                  <AlertTriangle className="size-3.5" aria-hidden="true" />
+                  明文传输提醒
+                </AlertTitle>
+                <AlertDescription className="mt-0.5">
+                  当前使用的是 HTTP 明文传输。同步的是 2FA 密钥，建议改成 HTTPS 后再长期使用。
+                </AlertDescription>
+              </div>
+            </Alert>
+          )}
+        </FramePanel>
+      </Frame>
     </div>
   );
 }

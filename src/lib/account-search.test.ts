@@ -75,6 +75,31 @@ describe("account-search", () => {
     expect(filterAccountsByQuery(accounts, "aws 个人", groupMap).map((a) => a.id)).toEqual(["b"]);
   });
 
+  it("matches account remark including multi-token queries while excluding secret", () => {
+    const groupMap = buildGroupNameMap(sampleGroups);
+    const accounts = [
+      makeAccount({
+        id: "r1",
+        issuer: "GitHub",
+        name: "dev@company.com",
+        remark: "生产环境 Root",
+        groupId: "work",
+      }),
+      makeAccount({
+        id: "r2",
+        issuer: "GitHub",
+        name: "qa@company.com",
+        remark: "测试账号",
+        groupId: "work",
+      }),
+    ];
+
+    expect(filterAccountsByQuery(accounts, "生产", groupMap).map((a) => a.id)).toEqual(["r1"]);
+    expect(filterAccountsByQuery(accounts, "git root", groupMap).map((a) => a.id)).toEqual(["r1"]);
+    expect(filterAccountsByQuery(accounts, "测试", groupMap).map((a) => a.id)).toEqual(["r2"]);
+    expect(filterAccountsByQuery(accounts, "JBSWY3DPEH", groupMap)).toEqual([]);
+  });
+
   it("never matches tokens that only appear in account.secret", () => {
     const groupMap = buildGroupNameMap(sampleGroups);
     const secretOnlyAccount = makeAccount({

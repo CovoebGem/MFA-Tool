@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { AlertCircle, CheckCircle2, X } from "lucide-react";
+import { cn } from "../lib/utils";
 
 interface ToastProps {
   message: string;
@@ -17,35 +19,30 @@ export default function Toast({ message, type, onClose }: ToastProps) {
   return (
     <div
       role="alert"
-      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${
+      data-toast-type={type}
+      className={cn(
+        "fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 rounded-xl border px-4 py-2.5 shadow-lg backdrop-blur-md",
         isSuccess
-          ? "bg-green-50 border-green-200 text-green-700"
-          : "bg-red-50 border-red-200 text-red-700"
-      }`}
+          ? "bg-success-surface border-success/30 text-success-foreground"
+          : "bg-destructive-surface border-destructive/30 text-destructive-foreground",
+      )}
     >
       {isSuccess ? (
-        <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <CheckCircle2 className="size-4.5 shrink-0" aria-hidden="true" />
       ) : (
-        <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-        </svg>
+        <AlertCircle className="size-4.5 shrink-0" aria-hidden="true" />
       )}
       <span className="text-sm font-medium">{message}</span>
       <button
         type="button"
         onClick={onClose}
         aria-label="关闭通知"
-        className={`ml-2 shrink-0 p-0.5 rounded-md transition-colors ${
-          isSuccess
-            ? "hover:bg-green-100 text-green-500"
-            : "hover:bg-red-100 text-red-500"
-        }`}
+        className={cn(
+          "ml-1.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors cursor-pointer",
+          isSuccess ? "hover:bg-success/15" : "hover:bg-destructive/15",
+        )}
       >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
+        <X className="size-3.5" aria-hidden="true" />
       </button>
     </div>
   );

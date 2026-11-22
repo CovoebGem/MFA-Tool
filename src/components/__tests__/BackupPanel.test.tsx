@@ -74,7 +74,7 @@ describe("BackupPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /导入备份/ }));
+    fireEvent.click(screen.getByRole("button", { name: "导入" }));
 
     await waitFor(() => {
       expect(onImport).toHaveBeenCalledOnce();
@@ -130,7 +130,7 @@ describe("BackupPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /导出全部/ }));
+    fireEvent.click(screen.getByRole("button", { name: "导出" }));
     expect(screen.getByRole("menu", { name: "选择导出格式" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("menuitem", { name: /Excel 表格（\.xlsx）/ }));
@@ -206,7 +206,7 @@ describe("BackupPanel", () => {
       />,
     );
 
-    const trigger = screen.getByRole("button", { name: /导出全部/ });
+    const trigger = screen.getByRole("button", { name: "导出" });
     fireEvent.click(trigger);
     expect(screen.getByRole("menu")).toBeInTheDocument();
 

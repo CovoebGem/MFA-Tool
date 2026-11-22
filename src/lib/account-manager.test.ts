@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { addAccounts, removeAccount, removeAccounts, moveAccountsToGroup, loadAccounts } from "./account-manager";
+import {
+  addAccounts,
+  removeAccount,
+  removeAccounts,
+  updateAccount,
+  moveAccountsToGroup,
+  loadAccounts,
+  toggleAccountPin,
+  setAccountsPinned,
+} from "./account-manager";
 import type { OTPAccount } from "../types";
 
 const mocks = vi.hoisted(() => ({
@@ -224,5 +233,121 @@ describe("loadAccounts", () => {
 
     mocks.invoke.mockResolvedValueOnce("[]");
     await expect(loadAccounts()).resolves.toEqual([]);
+  });
+});
+
+describe("toggleAccountPin", () => {
+  it("pins an unpinned account, sets pinnedAt/updatedAt, and does not mutate input", () => {
+    const accounts = [
+      makeAccount({ id: "a1", createdAt: 100, updatedAt: 100 }),
+      makeAccount({ id: "a2", createdAt: 200, updatedAt: 200 }),
+    ];
+    const snapshot = accounts.map((a) => ({ ...a }));
+
+    const pinned = toggleAccountPin(accounts, "a2");
+
+    expect(pinned).not.toBe(accounts);
+    expect(accounts).toEqual(snapshot);
+    expect(pinned[0]).toBe(accounts[0]);
+    expect(pinned[1].pinned).toBe(true);
+    expect(typeof pinned[1].pinnedAt).toBe("number");
+    expect(pinned[1].updatedAt).toBeGreaterThanOrEqual(pinned[1].pinnedAt!);
+  });
+
+  it("unpins a pinned account, clears pinnedAt, and preserves pinned: false for sync", () => {
+    const accounts = [
+      makeAccount({ id: "a1", pinned: true, pinnedAt: 500, createdAt: 100, updatedAt: 500 }),
+    ];
+
+    const unpinned = toggleAccountPin(accounts, "a1");
+
+    expect(unpinned[0].pinned).toBe(false);
+    expect(unpinned[0].pinnedAt).toBeUndefined();
+    expect("pinnedAt" in unpinned[0]).toBe(false);
+    expect(unpinned[0].updatedAt).toBeGreaterThanOrEqual(500);
+  });
+
+  it("is idempotent for explicit pinned flag and ignores unknown ids", () => {
+    const accounts = [
+      makeAccount({ id: "a1", pinned: true, pinnedAt: 500 }),
+      makeAccount({ id: "a2", pinned: false }),
+    ];
+
+    expect(toggleAccountPin(accounts, "a1", true)).toBe(accounts);
+    expect(toggleAccountPin(accounts, "a2", false)).toBe(accounts);
+    expect(toggleAccountPin(accounts, "missing")).toBe(accounts);
+  });
+});
+
+describe("setAccountsPinned", () => {
+  it("batch pins multiple unpinned accounts and preserves existing pinnedAt without mutating input", () => {
+    const existingPinned = makeAccount({
+      id: "a1",
+      pinned: true,
+      pinnedAt: 500,
+      createdAt: 100,
+      updatedAt: 500,
+    });
+    const unpinnedOne = makeAccount({ id: "a2", createdAt: 200, updatedAt: 200 });
+    const unpinnedTwo = makeAccount({ id: "a3", createdAt: 300, updatedAt: 300 });
+    const accounts = [existingPinned, unpinnedOne, unpinnedTwo];
+    const snapshot = accounts.map((a) => ({ ...a }));
+
+    const result = setAccountsPinned(accounts, ["a1", "a2", "a3"], true);
+
+    expect(result).not.toBe(accounts);
+    expect(accounts).toEqual(snapshot);
+    expect(result[0]).toBe(existingPinned);
+    expect(result[0].pinnedAt).toBe(500);
+    expect(result[1].pinned).toBe(true);
+    expect(typeof result[1].pinnedAt).toBe("number");
+    expect(result[1].updatedAt).toBeGreaterThanOrEqual(result[1].pinnedAt!);
+    expect(result[2].pinned).toBe(true);
+    expect(typeof result[2].pinnedAt).toBe("number");
+  });
+
+  it("batch unpins pinned accounts, removes pinnedAt, and keeps pinned: false for sync", () => {
+    const pinnedOne = makeAccount({ id: "a1", pinned: true, pinnedAt: 500, updatedAt: 500 });
+    const pinnedTwo = makeAccount({ id: "a2", pinned: true, pinnedAt: 600, updatedAt: 600 });
+    const untouched = makeAccount({ id: "a3", pinned: false, updatedAt: 300 });
+
+    const result = setAccountsPinned([pinnedOne, pinnedTwo, untouched], ["a1", "a2", "a3"], false);
+
+    expect(result[0].pinned).toBe(false);
+    expect("pinnedAt" in result[0]).toBe(false);
+    expect(result[0].updatedAt).toBeGreaterThanOrEqual(500);
+    expect(result[1].pinned).toBe(false);
+    expect("pinnedAt" in result[1]).toBe(false);
+    expect(result[2]).toBe(untouched);
+  });
+
+  it("returns original array reference when id list is empty, unknown, or no state changes", () => {
+    const accounts = [
+      makeAccount({ id: "a1", pinned: true, pinnedAt: 500 }),
+      makeAccount({ id: "a2", pinned: false }),
+    ];
+
+    expect(setAccountsPinned(accounts, [], true)).toBe(accounts);
+    expect(setAccountsPinned(accounts, ["missing"], true)).toBe(accounts);
+    expect(setAccountsPinned(accounts, ["a1"], true)).toBe(accounts);
+    expect(setAccountsPinned(accounts, ["a2"], false)).toBe(accounts);
+  });
+});
+
+describe("updateAccount", () => {
+  it("adds, trims, updates, and clears remark without affecting omitted remark", () => {
+    const accounts = [makeAccount({ id: "a1", updatedAt: 100 })];
+
+    const withRemark = updateAccount(accounts, "a1", { remark: "  公司主号  " });
+    expect(withRemark[0].remark).toBe("公司主号");
+    expect(withRemark[0].updatedAt).toBeGreaterThanOrEqual(100);
+
+    const editedOther = updateAccount(withRemark, "a1", { issuer: "GitHub Enterprise" });
+    expect(editedOther[0].issuer).toBe("GitHub Enterprise");
+    expect(editedOther[0].remark).toBe("公司主号");
+
+    const clearedRemark = updateAccount(editedOther, "a1", { remark: "   " });
+    expect(clearedRemark[0].remark).toBeUndefined();
+    expect("remark" in clearedRemark[0]).toBe(false);
   });
 });

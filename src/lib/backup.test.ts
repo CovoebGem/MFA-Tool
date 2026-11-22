@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Group, OTPAccount } from "../types";
-import { mergeBackupData, parseBackupJSON, validateBackupData } from "./backup";
+import { mergeBackupData, parseBackupJSON, sanitizeAccountNumbers, validateBackupData } from "./backup";
 
 function createAccount(overrides: Partial<OTPAccount>): OTPAccount {
   return {
@@ -161,5 +161,64 @@ describe("mergeBackupData", () => {
       accounts: [createAccount({ period: 30, digits: 6, counter: 0 })],
     });
     expect(parseBackupJSON(validJson).accounts).toHaveLength(1);
+  });
+
+  it("校验 pinned/pinnedAt 字段合法性并在导入合并时保留置顶状态", () => {
+    const base = {
+      version: 1,
+      exportedAt: "2026-01-01T00:00:00.000Z",
+      groups: [createGroup({ id: "default", name: "默认", isDefault: true })],
+    };
+
+    const badPayloads = [
+      { ...base, accounts: [{ ...createAccount({}), pinned: "yes" }] },
+      { ...base, accounts: [{ ...createAccount({}), pinned: 1 }] },
+      { ...base, accounts: [{ ...createAccount({}), pinnedAt: -1 }] },
+      { ...base, accounts: [{ ...createAccount({}), pinnedAt: 1.5 }] },
+      { ...base, accounts: [{ ...createAccount({}), pinnedAt: 1e308 }] },
+    ];
+
+    for (const payload of badPayloads) {
+      expect(validateBackupData(payload)).toBe(false);
+    }
+
+    const validPinned = {
+      ...base,
+      accounts: [createAccount({ id: "p1", pinned: true, pinnedAt: 123456 })],
+    };
+    expect(validateBackupData(validPinned)).toBe(true);
+
+    const existing = [
+      createAccount({ id: "ex-1", secret: "SECRET-EX", pinned: true, pinnedAt: 500 }),
+    ];
+    const imported = [
+      createAccount({ id: "imp-1", name: "imp@example.com", secret: "SECRET-IMP", pinned: true, pinnedAt: 900 }),
+    ];
+    const merged = mergeBackupData(existing, base.groups, imported, base.groups);
+    expect(merged.accounts).toEqual([
+      expect.objectContaining({ id: "ex-1", pinned: true, pinnedAt: 500 }),
+      expect.objectContaining({ id: "imp-1", pinned: true, pinnedAt: 900 }),
+    ]);
+  });
+
+  it("校验 remark 字段并在 sanitizeAccountNumbers 中清洗空白备注", () => {
+    const base = {
+      version: 1,
+      exportedAt: "2026-01-01T00:00:00.000Z",
+      groups: [createGroup({ id: "default", name: "默认", isDefault: true })],
+    };
+
+    expect(validateBackupData({ ...base, accounts: [{ ...createAccount({}), remark: 123 }] })).toBe(false);
+    expect(validateBackupData({ ...base, accounts: [{ ...createAccount({}), remark: "个人主号" }] })).toBe(true);
+
+    const clean = createAccount({ remark: "已清洗备注" });
+    expect(sanitizeAccountNumbers(clean)).toBe(clean);
+
+    const trimmed = sanitizeAccountNumbers(createAccount({ remark: "  需要修剪  " }));
+    expect(trimmed.remark).toBe("需要修剪");
+
+    const blank = sanitizeAccountNumbers(createAccount({ remark: "   " }));
+    expect(blank.remark).toBeUndefined();
+    expect("remark" in blank).toBe(false);
   });
 });

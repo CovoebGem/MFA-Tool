@@ -13,6 +13,7 @@ const runtimeClock = vi.hoisted(() => {
 const windowApi = vi.hoisted(() => {
   return {
     focusChangedHandler: null as ((event: { payload: boolean }) => void) | null,
+    onFocusChangedCalls: 0,
   };
 });
 
@@ -28,6 +29,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     onFocusChanged: vi.fn(async (handler: (event: { payload: boolean }) => void) => {
+      windowApi.onFocusChangedCalls += 1;
       windowApi.focusChangedHandler = handler;
       return () => {
         windowApi.focusChangedHandler = null;
@@ -44,12 +46,14 @@ function TOTPProbe({
   secret = SECRET,
   period = PERIOD,
   digits = DIGITS,
+  active = true,
 }: {
   secret?: string;
   period?: number;
   digits?: number;
+  active?: boolean;
 }) {
-  const { code, remaining } = useTOTP(secret, period, digits);
+  const { code, remaining } = useTOTP(secret, period, digits, active);
 
   return (
     <>
@@ -79,6 +83,7 @@ describe("useTOTP", () => {
     runtimeClock.currentNow = 0;
     runtimeClock.syncRuntimeClock.mockClear();
     windowApi.focusChangedHandler = null;
+    windowApi.onFocusChangedCalls = 0;
   });
 
   afterEach(() => {
@@ -268,5 +273,60 @@ describe("useTOTP", () => {
       generateTOTP(SECRET, PERIOD, DIGITS, start + 100),
     );
     expect(screen.getByTestId("remaining")).toHaveTextContent("30");
+  });
+
+  it("shares one clock session and window listener across 50 concurrent hooks", async () => {
+    const start = Date.parse("2025-01-01T00:00:29.900Z");
+    runtimeClock.currentNow = start;
+
+    render(
+      <>
+        {Array.from({ length: 50 }, (_, index) => (
+          <TOTPProbe key={index} />
+        ))}
+      </>,
+    );
+    await flushRuntimeClockSync();
+
+    expect(windowApi.onFocusChangedCalls).toBe(1);
+    expect(runtimeClock.syncRuntimeClock).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId("remaining")[0]).toHaveTextContent("1");
+
+    await act(async () => {
+      runtimeClock.currentNow = start + 100;
+      vi.advanceTimersByTime(100);
+      await Promise.resolve();
+    });
+
+    const remainingNodes = screen.getAllByTestId("remaining");
+    expect(remainingNodes).toHaveLength(50);
+    expect(remainingNodes[0]).toHaveTextContent("30");
+    expect(remainingNodes[49]).toHaveTextContent("30");
+  });
+
+  it("pauses updates while inactive and immediately syncs when activated", async () => {
+    const start = Date.parse("2025-01-01T00:00:29.900Z");
+    runtimeClock.currentNow = start;
+
+    const { rerender } = render(<TOTPProbe active={false} />);
+    await flushRuntimeClockSync();
+
+    expect(runtimeClock.syncRuntimeClock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("remaining")).toHaveTextContent("1");
+
+    await act(async () => {
+      runtimeClock.currentNow = start + 2100;
+      vi.advanceTimersByTime(2100);
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("remaining")).toHaveTextContent("1");
+
+    rerender(<TOTPProbe active />);
+    await flushRuntimeClockSync();
+
+    expect(screen.getByTestId("code")).toHaveTextContent(
+      generateTOTP(SECRET, PERIOD, DIGITS, start + 2100),
+    );
+    expect(screen.getByTestId("remaining")).toHaveTextContent("28");
   });
 });

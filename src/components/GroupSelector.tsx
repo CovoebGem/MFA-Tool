@@ -1,3 +1,4 @@
+import { NativeSelect } from "./ui/native-select";
 import type { Group, OTPAccount } from "../types";
 
 interface GroupSelectorProps {
@@ -25,11 +26,10 @@ export default function GroupSelector({
   };
 
   return (
-    <select
+    <NativeSelect
       value={selectedGroupId ?? ""}
       onChange={(e) => onSelect(e.target.value)}
       aria-label="选择分组"
-      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
     >
       <option value="" disabled>
         选择分组
@@ -39,6 +39,6 @@ export default function GroupSelector({
           {formatOption(group)}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }

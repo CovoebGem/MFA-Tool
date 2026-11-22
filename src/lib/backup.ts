@@ -32,21 +32,72 @@ export function isValidCounter(counter: unknown): counter is number {
   return typeof counter === "number" && Number.isSafeInteger(counter) && counter >= 0;
 }
 
+export function isValidPinned(pinned: unknown): pinned is boolean {
+  return typeof pinned === "boolean";
+}
+
+export function isValidPinnedAt(pinnedAt: unknown): pinnedAt is number {
+  return typeof pinnedAt === "number" && Number.isSafeInteger(pinnedAt) && pinnedAt >= 0;
+}
+
+export function isValidRemark(remark: unknown): remark is string {
+  return typeof remark === "string";
+}
+
 export function sanitizeAccountNumbers(account: OTPAccount): OTPAccount {
   const period = isValidPeriod(account.period) ? account.period : 30;
   const digits = isValidDigits(account.digits) ? account.digits : 6;
   const counter = isValidCounter(account.counter) ? account.counter : 0;
 
-  if (period === account.period && digits === account.digits && counter === account.counter) {
+  const hasValidPinned = account.pinned === undefined || isValidPinned(account.pinned);
+  const nextPinned = account.pinned === true ? true : account.pinned === false ? false : undefined;
+  const hasValidPinnedAt =
+    nextPinned === true
+      ? account.pinnedAt === undefined || isValidPinnedAt(account.pinnedAt)
+      : account.pinnedAt === undefined;
+
+  const normalizedRemark = isValidRemark(account.remark) ? account.remark.trim() : "";
+  const hasValidRemark =
+    account.remark === undefined ||
+    (isValidRemark(account.remark) && normalizedRemark.length > 0 && account.remark === normalizedRemark);
+
+  if (
+    period === account.period &&
+    digits === account.digits &&
+    counter === account.counter &&
+    hasValidPinned &&
+    hasValidPinnedAt &&
+    hasValidRemark
+  ) {
     return account;
   }
 
-  return {
+  const nextAccount: OTPAccount = {
     ...account,
     period,
     digits,
     counter,
   };
+
+  if (nextPinned === undefined) {
+    delete nextAccount.pinned;
+  } else {
+    nextAccount.pinned = nextPinned;
+  }
+
+  if (nextPinned === true && isValidPinnedAt(account.pinnedAt)) {
+    nextAccount.pinnedAt = account.pinnedAt;
+  } else {
+    delete nextAccount.pinnedAt;
+  }
+
+  if (normalizedRemark) {
+    nextAccount.remark = normalizedRemark;
+  } else {
+    delete nextAccount.remark;
+  }
+
+  return nextAccount;
 }
 
 function ensureDefaultGroup(groups: Group[]): Group[] {
@@ -93,6 +144,9 @@ export function validateBackupData(data: unknown): data is BackupData {
     if (a.period !== undefined && !isValidPeriod(a.period)) return false;
     if (a.digits !== undefined && !isValidDigits(a.digits)) return false;
     if (a.counter !== undefined && !isValidCounter(a.counter)) return false;
+    if (a.pinned !== undefined && !isValidPinned(a.pinned)) return false;
+    if (a.pinnedAt !== undefined && !isValidPinnedAt(a.pinnedAt)) return false;
+    if (a.remark !== undefined && !isValidRemark(a.remark)) return false;
   }
 
   for (const group of obj.groups) {

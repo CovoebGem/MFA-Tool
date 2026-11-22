@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import type { Page, OTPAccount, Group, DedupResult } from "./types";
+import { AlertCircle, Loader2 } from "lucide-react";
+import type { Page, OTPAccount, Group, DedupResult, CardLayoutConfig } from "./types";
 import Sidebar from "./components/Sidebar";
 import HomePage from "./components/HomePage";
 import AccountPage from "./components/AccountPage";
@@ -11,6 +12,7 @@ import Toast from "./components/Toast";
 import AppUpdateManager from "./components/AppUpdateManager";
 import BackupPanel from "./components/BackupPanel";
 import WebDavSyncPanel from "./components/WebDavSyncPanel";
+import { Alert, AlertDescription } from "./components/ui/alert";
 import { useAccounts, normalizeLoadedAccounts } from "./hooks/useAccounts";
 import { useGroups } from "./hooks/useGroups";
 import { useViewportHeight } from "./hooks/useViewportHeight";
@@ -19,6 +21,11 @@ import { checkDuplicates, skipDuplicates, overrideDuplicates } from "./lib/dedup
 import { deleteGroup, findOrCreateGroupByIssuer, loadGroups, saveGroups } from "./lib/group-manager";
 import { addAccounts, loadAccounts, moveAccountsToGroup, saveAccounts } from "./lib/account-manager";
 import { mergeBackupData, sanitizeAccountNumbers } from "./lib/backup";
+import {
+  loadCardLayoutConfig,
+  normalizeCardLayoutConfig,
+  saveCardLayoutConfig,
+} from "./lib/preference-store";
 import { mergeWebDavSyncData } from "./lib/webdav-sync";
 import {
   buildGroupNameMap,
@@ -39,6 +46,7 @@ function assignGroupsByIssuer(baseGroups: Group[], incomingAccounts: OTPAccount[
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [cardLayout, setCardLayout] = useState<CardLayoutConfig>(loadCardLayoutConfig);
   const [dedupState, setDedupState] = useState<{
     result: DedupResult;
     newGroups: Group[];
@@ -57,6 +65,12 @@ function App() {
 
   const showToast = useCallback((message: string, type: "success" | "error") => setToast({ message, type }), []);
 
+  const handleCardLayoutChange = useCallback((nextConfig: CardLayoutConfig) => {
+    const normalized = normalizeCardLayoutConfig(nextConfig);
+    setCardLayout(normalized);
+    saveCardLayoutConfig(normalized);
+  }, []);
+
   const {
     accounts,
     setAccounts,
@@ -71,6 +85,7 @@ function App() {
     deleteAccount,
     batchDeleteAccounts,
     editAccount,
+    batchSetPinned,
     refreshAccounts,
   } = useAccounts();
 
@@ -95,6 +110,27 @@ function App() {
     const visible = filterAccountsByQuery(accounts, accountSearchQuery, groupNameById);
     return new Set(visible.map((account) => account.id));
   }, [accounts, accountSearchQuery, groupNameById]);
+
+  const accountIdSet = useMemo(
+    () => new Set(accounts.map((account) => account.id)),
+    [accounts],
+  );
+
+  const groupSelectedAccountIds = useMemo(() => {
+    if (selectedAccountIds.size === 0) {
+      return selectedAccountIds;
+    }
+    let changed = false;
+    const next = new Set<string>();
+    for (const id of selectedAccountIds) {
+      if (accountIdSet.has(id)) {
+        next.add(id);
+      } else {
+        changed = true;
+      }
+    }
+    return changed ? next : selectedAccountIds;
+  }, [accountIdSet, selectedAccountIds]);
 
   const effectiveSelectedAccountIds = useMemo(() => {
     if (selectedAccountIds.size === 0) {
@@ -373,17 +409,18 @@ function App() {
     setDedupState(null);
   };
 
-  const handleDeleteGroup = async (groupId: string) => {
+  const handleDeleteGroup = useCallback(async (groupId: string) => {
     try {
       await commitAccountsAndGroups(
         ({ accounts: currentAccounts, groups: currentGroups }) =>
           deleteGroup(currentGroups, currentAccounts, groupId),
         { writeOrder: "accounts-first" },
       );
+      showToast("已删除分组，组内账户已自动移入默认分组", "success");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "删除分组失败", "error");
     }
-  };
+  }, [commitAccountsAndGroups, showToast]);
 
   const handleSaveToAccount = async (account: OTPAccount) => {
     await addNewAccounts([account]);
@@ -437,6 +474,22 @@ function App() {
     [commitAccounts, getLatestGroups, isGroupsLoaded, showToast],
   );
 
+  const handleBatchSetPinned = useCallback(
+    async (accountIds: string[], pinned: boolean) => {
+      try {
+        await batchSetPinned(accountIds, pinned);
+        showToast(pinned ? "已批量置顶选中账户" : "已批量取消置顶选中账户", "success");
+      } catch (err) {
+        showToast(
+          err instanceof Error ? err.message : pinned ? "批量置顶失败" : "批量取消置顶失败",
+          "error",
+        );
+        throw err;
+      }
+    },
+    [batchSetPinned, showToast],
+  );
+
   const handleMergeWebDavRemote = useCallback(
     async (remoteAccounts: OTPAccount[], remoteGroups: Group[]) => {
       const committed = await commitAccountsAndGroups(
@@ -457,7 +510,7 @@ function App() {
     );
   };
 
-  const handleReorderAccounts = async (reorderedAccounts: OTPAccount[]) => {
+  const handleReorderAccounts = useCallback(async (reorderedAccounts: OTPAccount[]) => {
     await commitAccounts((currentAccounts) => {
       if (reorderedAccounts.length !== currentAccounts.length) {
         return null;
@@ -488,7 +541,7 @@ function App() {
         };
       });
     }, "保存账户排序失败");
-  };
+  }, [commitAccounts]);
 
   const handleNavigate = useCallback((page: Page) => {
     setCurrentPage(page);
@@ -531,6 +584,7 @@ function App() {
             onDelete={deleteAccount}
             onBatchDelete={batchDeleteAccounts}
             onUpdate={editAccount}
+            onBatchSetPinned={handleBatchSetPinned}
             onBatchMoveToGroup={handleBatchMoveToGroup}
             onRefresh={refreshAccounts}
             onReorder={handleReorderAccounts}
@@ -539,6 +593,8 @@ function App() {
             searchQuery={accountSearchQuery}
             onSearchQueryChange={handleAccountSearchQueryChange}
             focusSearchTick={searchFocusTick}
+            cardLayout={cardLayout}
+            onCardLayoutChange={handleCardLayoutChange}
           />
         );
       case "groups":
@@ -550,9 +606,17 @@ function App() {
             onRenameGroup={editGroup}
             onDeleteGroup={handleDeleteGroup}
             onDeleteAccount={deleteAccount}
+            onBatchDelete={batchDeleteAccounts}
             onUpdateAccount={editAccount}
+            onBatchSetPinned={handleBatchSetPinned}
+            onBatchMoveToGroup={handleBatchMoveToGroup}
+            onRefresh={refreshAccounts}
+            selectedIds={selectedAccountIds}
+            onSelectedIdsChange={setSelectedAccountIds}
             focusSearchTick={searchFocusTick}
             onSearchInAllAccounts={handleSearchInAllAccounts}
+            cardLayout={cardLayout}
+            onCardLayoutChange={handleCardLayoutChange}
           />
         );
       case "temp":
@@ -572,7 +636,7 @@ function App() {
   };
 
   return (
-    <div className="bg-gray-100 dark:bg-gray-900" style={{ minHeight: viewportHeight }}>
+    <div className="bg-background text-foreground" style={{ minHeight: viewportHeight }}>
       <Sidebar
         currentPage={currentPage}
         onNavigate={handleNavigate}
@@ -581,13 +645,20 @@ function App() {
         viewportHeight={viewportHeight}
         theme={theme}
         onThemeChange={setTheme}
+        footerSlot={
+          <AppUpdateManager
+            onToast={showToast}
+            variant="sidebar"
+            collapsed={sidebarCollapsed}
+          />
+        }
       />
       <main
-        className={`${sidebarCollapsed ? "ml-16" : "ml-48"} transition-[margin-left] duration-200 ease-out`}
+        className={`${sidebarCollapsed ? "ml-16" : "ml-56"} flex flex-col transition-[margin-left] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]`}
         style={{ minHeight: viewportHeight }}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-border bg-background px-6">
+          <h1 className="text-base font-semibold tracking-tight text-foreground">
             {currentPage === "home" && "首页"}
             {currentPage === "accounts" && "账户管理"}
             {currentPage === "groups" && "分组管理"}
@@ -595,51 +666,38 @@ function App() {
             {currentPage === "sync" && "云同步"}
           </h1>
           <div className="flex items-center gap-2">
-            <AppUpdateManager onToast={showToast} />
             <BackupPanel
               accounts={accounts}
               groups={groups}
-              selectedAccountIds={currentPage === "accounts" ? effectiveSelectedAccountIds : undefined}
+              selectedAccountIds={
+                currentPage === "accounts"
+                  ? effectiveSelectedAccountIds
+                  : currentPage === "groups"
+                    ? groupSelectedAccountIds
+                    : undefined
+              }
               onImport={handleImportBackup}
               onToast={showToast}
             />
           </div>
-        </div>
+        </header>
         {error && (
-          <div
-            role="alert"
-            className="mx-4 mt-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 px-4 py-3 text-sm text-red-700 dark:text-red-400"
-          >
-            {error}
+          <div className="w-full px-6 pt-4">
+            <Alert variant="destructive" role="alert">
+              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <AlertDescription className="text-sm opacity-100">{error}</AlertDescription>
+            </Alert>
           </div>
         )}
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <svg
-              className="h-8 w-8 animate-spin text-blue-500"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            <span className="ml-3 text-gray-500 dark:text-gray-400">加载中...</span>
+          <div className="flex flex-1 items-center justify-center gap-2.5 py-20">
+            <Loader2 className="size-6 animate-spin text-primary" aria-hidden="true" />
+            <span className="text-sm text-muted-foreground">加载中...</span>
           </div>
         ) : (
-          renderPage()
+          <div className="flex w-full flex-1 flex-col">
+            {renderPage()}
+          </div>
         )}
       </main>
       {dedupState && (

@@ -294,4 +294,35 @@ describe("Base32 whitespace normalization in input boundaries", () => {
       expect(nameInput.value).toBe("");
     });
   });
+
+  it("persists trimmed optional remark and locks remark input during submission", async () => {
+    let resolveSave!: () => void;
+    const onAccountAdded = vi.fn().mockImplementationOnce(
+      () => new Promise<void>((resolve) => { resolveSave = resolve; }),
+    );
+    render(<ManualAddForm onAccountAdded={onAccountAdded} />);
+
+    const remarkInput = screen.getByLabelText(/备注/) as HTMLInputElement;
+    fireEvent.change(screen.getByLabelText(/密钥/), { target: { value: "JBSWY3DPEHPK3PXP" } });
+    fireEvent.change(screen.getByLabelText(/账户名称/), { target: { value: "alice@example.com" } });
+    fireEvent.change(remarkInput, { target: { value: "  开发环境管理员  " } });
+    fireEvent.click(screen.getByRole("button", { name: "添加账户" }));
+
+    expect(remarkInput).toBeDisabled();
+
+    await act(async () => {
+      resolveSave();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(onAccountAdded).toHaveBeenCalledWith([
+        expect.objectContaining({
+          name: "alice@example.com",
+          remark: "开发环境管理员",
+        }),
+      ]);
+      expect(remarkInput.value).toBe("");
+    });
+  });
 });

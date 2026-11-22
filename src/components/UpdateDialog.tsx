@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef } from "react";
 import { useOptionalI18n } from "../contexts/I18nContext";
 import type { DownloadProgress, InstallPhase, UpdateSummary } from "../hooks/useAppUpdater";
 import type { UpdateRoute } from "../lib/updater-client";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
 
 interface UpdateDialogProps {
   update: UpdateSummary;
@@ -221,77 +225,80 @@ export default function UpdateDialog({
       ref={dialogRef}
       tabIndex={-1}
       data-app-update-dialog="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 outline-none"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 outline-none backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-label="应用更新"
     >
-      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
-        <div className="border-b border-gray-200 bg-gradient-to-r from-amber-50 via-white to-white px-6 py-5 dark:border-gray-700 dark:from-amber-950/40 dark:via-gray-800 dark:to-gray-800">
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+        <div className="border-b border-border bg-warning-surface/50 px-6 py-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">
+              <p className="text-xs font-semibold text-warning-foreground">
                 New Release
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <h2 className="mt-1.5 text-lg font-semibold text-foreground">
                 {restartReady ? "更新已准备完成" : "发现新版本可更新"}
               </h2>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              <p className="mt-1.5 text-sm text-muted-foreground">
                 当前版本 {update.currentVersion}，最新版本 {update.version}
               </p>
             </div>
-            <span className="rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300">
+            <Badge variant="warning">
               v{update.version}
-            </span>
+            </Badge>
           </div>
         </div>
 
-        <div className="space-y-5 px-6 py-5">
-          <div className="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-300 sm:grid-cols-2">
+        <div className="flex flex-col gap-4 px-6 py-5">
+          <div className="grid gap-3 rounded-xl border border-border bg-muted/40 p-4 text-sm sm:grid-cols-2">
             <div>
-              <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">发布时间</div>
-              <div className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+              <div className="text-xs text-muted-foreground">发布时间</div>
+              <div className="mt-1 font-medium text-foreground">
                 {formatDate(update.date, locale)}
               </div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">更新方式</div>
-              <div className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+              <div className="text-xs text-muted-foreground">更新方式</div>
+              <div className="mt-1 font-medium text-foreground">
                 {getRouteLabel(route)}
               </div>
             </div>
           </div>
 
           {fallbackNotice && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-              {fallbackNotice}
-            </div>
+            <Alert variant="warning">
+              <AlertDescription className="text-sm opacity-100">{fallbackNotice}</AlertDescription>
+            </Alert>
           )}
 
           <div>
-            <div className="mb-2 text-sm font-medium text-gray-800 dark:text-gray-100">更新说明</div>
-            <div className="max-h-52 overflow-y-auto rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm leading-6 whitespace-pre-wrap text-gray-700 dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-200">
+            <div className="mb-2 text-xs font-semibold text-muted-foreground">更新说明</div>
+            <div className="max-h-52 overflow-y-auto rounded-xl border border-border bg-background/60 px-4 py-3 text-sm leading-6 whitespace-pre-wrap text-foreground">
               {notes}
             </div>
           </div>
 
           {downloadProgress && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-500/30 dark:bg-blue-500/10">
-              <div className="flex items-center justify-between gap-3 text-sm font-medium text-blue-800 dark:text-blue-200">
+            <div className="rounded-xl border border-info/30 bg-info-surface px-4 py-3 text-info-foreground">
+              <div className="flex items-center justify-between gap-3 text-sm font-medium">
                 <span>{getProgressTitle(installPhase, route)}</span>
-                <span>
+                <span className="tabular-nums">
                   {progressPercent !== null ? `${progressPercent}%` : formatBytes(downloadProgress.downloadedBytes)}
                 </span>
               </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-blue-100 dark:bg-blue-950/50">
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-info/20">
                 <div
                   data-testid="update-progress-bar"
                   data-indeterminate={isIndeterminate ? "true" : "false"}
-                  className={`h-full rounded-full bg-blue-500 transition-all duration-200 ${progressWidthClass ?? ""}`}
+                  className={cn(
+                    "h-full rounded-full bg-primary transition-all duration-200",
+                    progressWidthClass,
+                  )}
                   style={progressWidthStyle}
                 />
               </div>
-              <div className="mt-2 text-xs text-blue-700 dark:text-blue-200/80">
+              <div className="mt-2 text-xs opacity-85 tabular-nums">
                 已下载 {formatBytes(downloadProgress.downloadedBytes)}
                 {downloadProgress.totalBytes ? ` / ${formatBytes(downloadProgress.totalBytes)}` : ""}
               </div>
@@ -299,51 +306,47 @@ export default function UpdateDialog({
           )}
 
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-              {error}
-            </div>
+            <Alert variant="destructive">
+              <AlertDescription className="text-sm opacity-100">{error}</AlertDescription>
+            </Alert>
           )}
 
           {restartReady && (
-            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300">
-              更新包已经安装完成。点击“立即重启”后会重新启动应用并进入新版本。
-            </div>
+            <Alert variant="success">
+              <AlertDescription className="text-sm opacity-100">
+                更新包已经安装完成。点击“立即重启”后会重新启动应用并进入新版本。
+              </AlertDescription>
+            </Alert>
           )}
         </div>
 
-        <div className="flex flex-col-reverse gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-900/40 sm:flex-row sm:justify-end">
-          <button
-            type="button"
+        <div className="flex flex-col-reverse gap-2.5 border-t border-border bg-muted/35 px-6 py-4 sm:flex-row sm:justify-end">
+          <Button
+            variant="outline"
             onClick={onClose}
             disabled={installing}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
           >
             {restartReady ? "稍后重启" : "稍后提醒"}
-          </button>
+          </Button>
 
           {restartReady ? (
-            <button
-              type="button"
+            <Button
               onClick={onRestart}
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
+              className="bg-success text-white hover:bg-success/90"
             >
               立即重启
-            </button>
+            </Button>
           ) : handleExpired ? (
-            <button
-              type="button"
+            <Button
               onClick={onRecheck ?? onInstall}
               disabled={installing || checking}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
             >
               {checking ? "检查更新中..." : "重新检查更新"}
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
+            <Button
               onClick={onInstall}
               disabled={installing || checking}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
             >
               {checking
                 ? "检查更新中..."
@@ -352,7 +355,7 @@ export default function UpdateDialog({
                   : installing
                     ? "下载安装中..."
                     : "立即更新"}
-            </button>
+            </Button>
           )}
         </div>
       </div>

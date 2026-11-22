@@ -51,24 +51,26 @@ describe("Toast", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("success type has green theme classes", () => {
+  it("success type has success semantic theme classes", () => {
     const onClose = vi.fn();
     render(<Toast message="success msg" type="success" onClose={onClose} />);
 
     const alert = screen.getByRole("alert");
-    expect(alert.className).toContain("bg-green-50");
-    expect(alert.className).toContain("border-green-200");
-    expect(alert.className).toContain("text-green-700");
+    expect(alert).toHaveAttribute("data-toast-type", "success");
+    expect(alert.className).toContain("bg-success-surface");
+    expect(alert.className).toContain("border-success/30");
+    expect(alert.className).toContain("text-success-foreground");
   });
 
-  it("error type has red theme classes", () => {
+  it("error type has destructive semantic theme classes", () => {
     const onClose = vi.fn();
     render(<Toast message="error msg" type="error" onClose={onClose} />);
 
     const alert = screen.getByRole("alert");
-    expect(alert.className).toContain("bg-red-50");
-    expect(alert.className).toContain("border-red-200");
-    expect(alert.className).toContain("text-red-700");
+    expect(alert).toHaveAttribute("data-toast-type", "error");
+    expect(alert.className).toContain("bg-destructive-surface");
+    expect(alert.className).toContain("border-destructive/30");
+    expect(alert.className).toContain("text-destructive-foreground");
   });
 
   it('has role="alert" for accessibility', () => {

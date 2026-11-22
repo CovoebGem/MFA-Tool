@@ -1,4 +1,6 @@
+import { LockKeyhole } from "lucide-react";
 import AccountCard from "./AccountCard";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import type { OTPAccount } from "../types";
 
 interface AccountListProps {
@@ -9,31 +11,26 @@ interface AccountListProps {
 export default function AccountList({ accounts, onDelete }: AccountListProps) {
   if (accounts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
-        <svg
-          className="w-16 h-16 mb-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1}
-          stroke="currentColor"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-          />
-        </svg>
-        <p className="text-base font-medium mb-1">暂无账户</p>
-        <p className="text-sm">请上传二维码或手动添加</p>
-      </div>
+      <Empty className="py-16">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <LockKeyhole aria-hidden="true" />
+          </EmptyMedia>
+          <EmptyTitle>暂无账户</EmptyTitle>
+          <EmptyDescription>请上传二维码或手动添加</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3.5 grid-cols-[repeat(auto-fill,minmax(310px,1fr))]">
       {accounts.map((account) => (
-        <AccountCard key={account.id} account={account} onDelete={onDelete} />
+        <AccountCard
+          key={account.id}
+          account={account}
+          onDelete={onDelete}
+        />
       ))}
     </div>
   );

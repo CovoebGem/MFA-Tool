@@ -1,26 +1,69 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import { LockKeyhole, Pin, SearchX } from "lucide-react";
 import AccountCard from "./AccountCard";
+import AccountListRow, { AccountListTable } from "./AccountListRow";
 import DraggableAccountList from "./DraggableAccountList";
 import AccountToolbar from "./AccountToolbar";
-import BatchToolbar from "./BatchToolbar";
 import SortControls from "./SortControls";
+import ViewModeToggle from "./ViewModeToggle";
+import CardLayoutControl from "./CardLayoutControl";
 import AccountSearchBar, { getSearchShortcutHint } from "./AccountSearchBar";
-import { sortAccounts, type SortMode } from "../lib/sorter";
-import { loadSortConfig, saveSortConfig } from "../lib/preference-store";
+import MarqueeSelectionBox from "./MarqueeSelectionBox";
+import { useMarqueeSelection } from "../hooks/useMarqueeSelection";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Separator } from "./ui/separator";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "./ui/empty";
+import { cn } from "../lib/utils";
+import { isAccountPinned, sortAccounts, type SortMode } from "../lib/sorter";
+import {
+  getCardScale,
+  loadCardLayoutConfig,
+  loadSortConfig,
+  loadViewMode,
+  normalizeCardLayoutConfig,
+  saveCardLayoutConfig,
+  saveSortConfig,
+  saveViewMode,
+} from "../lib/preference-store";
 import {
   buildGroupNameMap,
   filterAccountsByQuery,
   normalizeSearchQuery,
 } from "../lib/account-search";
 import { useOptionalI18n } from "../contexts/I18nContext";
-import type { OTPAccount, Group, SortConfig } from "../types";
+import type {
+  AccountViewMode,
+  CardLayoutConfig,
+  OTPAccount,
+  Group,
+  SortConfig,
+} from "../types";
 
 interface AccountPageProps {
   accounts: OTPAccount[];
   groups: Group[];
   onDelete: (id: string) => void;
   onBatchDelete?: (ids: string[]) => Promise<void> | void;
-  onUpdate?: (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>) => void;
+  onUpdate?: (
+    id: string,
+    updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret" | "remark">>,
+  ) => void;
+  onBatchSetPinned?: (accountIds: string[], pinned: boolean) => Promise<void> | void;
   onBatchMoveToGroup: (accountIds: string[], groupId: string) => Promise<void> | void;
   onRefresh: () => Promise<void>;
   onReorder?: (accounts: OTPAccount[]) => void;
@@ -29,11 +72,8 @@ interface AccountPageProps {
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
   focusSearchTick?: number;
-}
-
-function getGroupName(groups: Group[], groupId: string): string {
-  const group = groups.find((g) => g.id === groupId);
-  return group ? group.name : "未知分组";
+  cardLayout?: CardLayoutConfig;
+  onCardLayoutChange?: (config: CardLayoutConfig) => void;
 }
 
 function isEditableElement(element: Element | null, allowedElement: HTMLElement | null): boolean {
@@ -55,6 +95,7 @@ export default function AccountPage({
   onDelete,
   onBatchDelete,
   onUpdate,
+  onBatchSetPinned,
   onBatchMoveToGroup,
   onRefresh,
   onReorder,
@@ -63,12 +104,48 @@ export default function AccountPage({
   searchQuery,
   onSearchQueryChange,
   focusSearchTick,
+  cardLayout,
+  onCardLayoutChange,
 }: AccountPageProps) {
   const { t } = useOptionalI18n();
   const [sortConfig, setSortConfig] = useState<SortConfig>(loadSortConfig);
   const [sortMode, setSortMode] = useState<SortMode>("auto");
+  const [viewMode, setViewMode] = useState<AccountViewMode>(loadViewMode);
+  const [internalCardLayout, setInternalCardLayout] = useState<CardLayoutConfig>(
+    loadCardLayoutConfig,
+  );
   const [internalSearchQuery, setInternalSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const isControlledCardLayout =
+    cardLayout !== undefined && onCardLayoutChange !== undefined;
+  const effectiveCardLayout = isControlledCardLayout
+    ? cardLayout
+    : internalCardLayout;
+  const handleCardLayoutChange = useCallback(
+    (nextConfig: CardLayoutConfig) => {
+      const normalized = normalizeCardLayoutConfig(nextConfig);
+      if (isControlledCardLayout) {
+        onCardLayoutChange(normalized);
+      } else {
+        setInternalCardLayout(normalized);
+        saveCardLayoutConfig(normalized);
+      }
+    },
+    [isControlledCardLayout, onCardLayoutChange],
+  );
+
+  const cardScale = useMemo(
+    () => getCardScale(effectiveCardLayout.cardMinWidth),
+    [effectiveCardLayout.cardMinWidth],
+  );
+  const cardGridStyle = useMemo(
+    () => ({
+      gridTemplateColumns: `repeat(auto-fill, minmax(${effectiveCardLayout.cardMinWidth}px, 1fr))`,
+      gap: `${effectiveCardLayout.cardGap}px`,
+    }),
+    [effectiveCardLayout.cardGap, effectiveCardLayout.cardMinWidth],
+  );
 
   const effectiveSearchQuery = searchQuery ?? internalSearchQuery;
   const hasActiveQuery = normalizeSearchQuery(effectiveSearchQuery) !== "";
@@ -96,6 +173,11 @@ export default function AccountPage({
     saveSortConfig(config);
   }, []);
 
+  const handleViewModeChange = useCallback((mode: AccountViewMode) => {
+    setViewMode(mode);
+    saveViewMode(mode);
+  }, []);
+
   const handleSortModeChange = useCallback((mode: SortMode) => {
     if (mode === "custom" && hasActiveQuery) {
       return;
@@ -118,6 +200,19 @@ export default function AccountPage({
     [sortedAccounts, effectiveSearchQuery, groupNameById],
   );
 
+  const { pinnedVisible, otherVisible } = useMemo(() => {
+    const pinned: OTPAccount[] = [];
+    const other: OTPAccount[] = [];
+    for (const account of visibleAccounts) {
+      if (isAccountPinned(account)) {
+        pinned.push(account);
+      } else {
+        other.push(account);
+      }
+    }
+    return { pinnedVisible: pinned, otherVisible: other };
+  }, [visibleAccounts]);
+
   const visibleIdSet = useMemo(
     () => new Set(visibleAccounts.map((account) => account.id)),
     [visibleAccounts],
@@ -138,6 +233,13 @@ export default function AccountPage({
     }
     return changed ? next : selectedIds;
   }, [selectedIds, visibleIdSet]);
+
+  const effectiveSelectedIdsRef = useRef(effectiveSelectedIds);
+  const visibleIdSetRef = useRef(visibleIdSet);
+  useLayoutEffect(() => {
+    effectiveSelectedIdsRef.current = effectiveSelectedIds;
+    visibleIdSetRef.current = visibleIdSet;
+  }, [effectiveSelectedIds, visibleIdSet]);
 
   useEffect(() => {
     if (effectiveSelectedIds !== selectedIds) {
@@ -184,15 +286,18 @@ export default function AccountPage({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const toggleSelect = useCallback((id: string) => {
-    if (!visibleIdSet.has(id)) {
-      return;
-    }
-    const next = new Set(effectiveSelectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    onSelectedIdsChange(next);
-  }, [effectiveSelectedIds, onSelectedIdsChange, visibleIdSet]);
+  const toggleSelect = useCallback(
+    (id: string) => {
+      if (!visibleIdSetRef.current.has(id)) {
+        return;
+      }
+      const next = new Set(effectiveSelectedIdsRef.current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      onSelectedIdsChange(next);
+    },
+    [onSelectedIdsChange],
+  );
 
   const toggleSelectAll = useCallback(() => {
     const allVisibleSelected =
@@ -208,18 +313,6 @@ export default function AccountPage({
 
   const clearSelection = useCallback(() => onSelectedIdsChange(new Set()), [onSelectedIdsChange]);
 
-  const handleBatchMove = useCallback(
-    async (groupId: string) => {
-      try {
-        await onBatchMoveToGroup(Array.from(effectiveSelectedIds), groupId);
-        clearSelection();
-      } catch {
-        // 移动保存失败时保留当前选择
-      }
-    },
-    [effectiveSelectedIds, onBatchMoveToGroup, clearSelection],
-  );
-
   const handleReorder = useCallback((reorderedAccounts: OTPAccount[]) => {
     if (hasActiveQuery || !onReorder) {
       return;
@@ -230,40 +323,88 @@ export default function AccountPage({
   const isCustomMode = sortMode === "custom";
   const showInteractiveDragList = isCustomMode && !hasActiveQuery;
   const shortcutHint = useMemo(() => getSearchShortcutHint(), []);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const { overlayRef, handleMouseDown } = useMarqueeSelection({
+    containerRef,
+    enabled: !isCustomMode && visibleAccounts.length > 0,
+    selectedIds: effectiveSelectedIds,
+    visibleIdSet,
+    onSelectionChange: onSelectedIdsChange,
+  });
+
+  const renderAccountsView = (items: OTPAccount[]) => {
+    if (viewMode === "list") {
+      return (
+        <AccountListTable showGroupColumn>
+          {items.map((account) => (
+            <AccountListRow
+              key={account.id}
+              account={account}
+              onDelete={onDelete}
+              onUpdate={onUpdate}
+              groupName={groupNameById.get(account.groupId) ?? "未知分组"}
+              showGroupColumn
+              selected={!isCustomMode ? effectiveSelectedIds.has(account.id) : undefined}
+              onToggleSelect={!isCustomMode ? toggleSelect : undefined}
+            />
+          ))}
+        </AccountListTable>
+      );
+    }
+
+    return (
+      <div className="grid" style={cardGridStyle} data-card-scale={cardScale}>
+        {items.map((account) => (
+          <AccountCard
+            key={account.id}
+            account={account}
+            onDelete={onDelete}
+            onUpdate={onUpdate}
+            groupName={groupNameById.get(account.groupId) ?? "未知分组"}
+            selected={!isCustomMode ? effectiveSelectedIds.has(account.id) : undefined}
+            onToggleSelect={!isCustomMode ? toggleSelect : undefined}
+          />
+        ))}
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-4 px-4 pt-4 pb-6">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+    <div
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      className="flex flex-1 flex-col gap-5 px-6 py-5"
+    >
+      {/* 标题行与视图/排序模式切换 */}
+      <div
+        data-no-marquee="true"
+        className="flex flex-wrap items-center justify-between gap-3"
+      >
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">
           {hasActiveQuery
             ? `全部账户（${visibleAccounts.length} / ${accounts.length}）`
             : `全部账户（${accounts.length}）`}
         </h2>
-        <div className="flex items-center gap-3">
-          {sortMode === "auto" && (
-            <>
-              <AccountToolbar
-                accounts={visibleAccounts}
-                allAccounts={accounts}
-                selectedIds={effectiveSelectedIds}
-                onDelete={onDelete}
-                onBatchDelete={onBatchDelete}
-                onRefresh={onRefresh}
-                onToggleSelectAll={toggleSelectAll}
-                onClearSelection={clearSelection}
-              />
-              <SortControls config={sortConfig} onChange={handleSortChange} />
-            </>
-          )}
-          <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+
+        <div className="flex flex-wrap items-center gap-2">
+          <ViewModeToggle value={viewMode} onChange={handleViewModeChange} />
+          <CardLayoutControl
+            config={effectiveCardLayout}
+            onChange={handleCardLayoutChange}
+            viewMode={viewMode}
+          />
+
+          <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/80 p-1">
             <button
               type="button"
               onClick={() => handleSortModeChange("auto")}
-              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-[color,background-color,box-shadow] duration-150 cursor-pointer",
                 sortMode === "auto"
-                  ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              }`}
+                  ? "bg-card text-primary shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
             >
               自动排序
             </button>
@@ -272,11 +413,12 @@ export default function AccountPage({
               disabled={hasActiveQuery}
               title={hasActiveQuery ? t("accounts.dragDisabledHint") : undefined}
               onClick={() => handleSortModeChange("custom")}
-              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-[color,background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
                 sortMode === "custom"
-                  ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              }`}
+                  ? "bg-card text-primary shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
             >
               拖拽排序
             </button>
@@ -284,94 +426,137 @@ export default function AccountPage({
         </div>
       </div>
 
-      {accounts.length > 0 && (
-        <AccountSearchBar
-          value={effectiveSearchQuery}
-          onChange={updateSearchQuery}
-          onClear={handleClearSearch}
-          inputRef={searchInputRef}
-          shortcutHint={shortcutHint}
-        />
+      {/* ReUI 统一控制栏（置顶、移动到分组、删除、刷新、全选直达右侧） */}
+      {(accounts.length > 0 || sortMode === "auto") && (
+        <div
+          data-no-marquee="true"
+          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-2xs md:flex-row md:items-center md:justify-between"
+        >
+          {accounts.length > 0 && (
+            <div className="min-w-0 flex-1">
+              <AccountSearchBar
+                value={effectiveSearchQuery}
+                onChange={updateSearchQuery}
+                onClear={handleClearSearch}
+                inputRef={searchInputRef}
+                shortcutHint={shortcutHint}
+                compact
+              />
+            </div>
+          )}
+
+          {sortMode === "auto" && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <SortControls config={sortConfig} onChange={handleSortChange} />
+              <Separator orientation="vertical" className="hidden h-6 sm:block" />
+              <AccountToolbar
+                accounts={visibleAccounts}
+                groups={groups}
+                selectedIds={effectiveSelectedIds}
+                onDelete={onDelete}
+                onBatchDelete={onBatchDelete}
+                onBatchSetPinned={onBatchSetPinned}
+                onBatchMoveToGroup={onBatchMoveToGroup}
+                onRefresh={onRefresh}
+                onToggleSelectAll={toggleSelectAll}
+                onClearSelection={clearSelection}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {accounts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
-          <svg
-            className="w-16 h-16 mb-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1}
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-            />
-          </svg>
-          <p className="text-base font-medium mb-1">暂无账户</p>
-          <p className="text-sm">请前往首页导入或手动添加</p>
-        </div>
+        <Empty className="py-16">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <LockKeyhole aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>暂无账户</EmptyTitle>
+            <EmptyDescription>请前往首页导入或手动添加</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : visibleAccounts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-white/70 dark:bg-gray-800/40 py-14 px-4 text-center">
-          <p className="text-base font-medium text-gray-700 dark:text-gray-200">
-            未找到匹配「{effectiveSearchQuery.trim()}」的账户
-          </p>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            可尝试按服务商、账户名称或分组名称搜索
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              handleClearSearch();
-              searchInputRef.current?.focus();
-            }}
-            className="mt-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-          >
-            {t("accounts.clearSearch")}
-          </button>
-        </div>
+        <Empty className="py-14">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <SearchX aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>
+              未找到匹配「{effectiveSearchQuery.trim()}」的账户
+            </EmptyTitle>
+            <EmptyDescription>
+              可尝试按服务商、账户名称、备注或分组名称搜索
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                handleClearSearch();
+                searchInputRef.current?.focus();
+              }}
+            >
+              {t("accounts.clearSearch")}
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : isCustomMode ? (
-        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-          {hasActiveQuery ? t("accounts.dragDisabledHint") : "拖拽卡片以调整顺序"}
-        </div>
+        <p className="text-xs text-muted-foreground">
+          {hasActiveQuery
+            ? t("accounts.dragDisabledHint")
+            : viewMode === "list"
+              ? "拖拽列表行以调整顺序"
+              : "拖拽卡片以调整顺序"}
+        </p>
       ) : null}
 
       {visibleAccounts.length > 0 && showInteractiveDragList ? (
         <DraggableAccountList
           accounts={visibleAccounts}
           groups={groups}
+          viewMode={viewMode}
+          cardLayout={effectiveCardLayout}
           onDelete={onDelete}
           onUpdate={onUpdate}
           onReorder={handleReorder}
         />
       ) : visibleAccounts.length > 0 ? (
-        <>
-          {!isCustomMode && effectiveSelectedIds.size > 0 && (
-            <BatchToolbar
-              selectedCount={effectiveSelectedIds.size}
-              groups={groups}
-              onMove={handleBatchMove}
-              onClearSelection={clearSelection}
-            />
-          )}
+        <div className="flex flex-col gap-4">
+          {pinnedVisible.length > 0 ? (
+            <div className="flex flex-col gap-6">
+              <section aria-label={t("accounts.pinnedSection")} className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <Pin className="size-3.5 text-pin shrink-0" aria-hidden="true" />
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {t("accounts.pinnedSection")}
+                  </span>
+                  <Badge variant="secondary">{pinnedVisible.length}</Badge>
+                  <div className="h-px flex-1 bg-border/60" aria-hidden="true" />
+                </div>
+                {renderAccountsView(pinnedVisible)}
+              </section>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleAccounts.map((account) => (
-              <AccountCard
-                key={account.id}
-                account={account}
-                onDelete={onDelete}
-                onUpdate={onUpdate}
-                groupName={getGroupName(groups, account.groupId)}
-                selected={!isCustomMode ? effectiveSelectedIds.has(account.id) : undefined}
-                onToggleSelect={!isCustomMode ? toggleSelect : undefined}
-              />
-            ))}
-          </div>
-        </>
+              {otherVisible.length > 0 && (
+                <section aria-label={t("accounts.otherSection")} className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      {t("accounts.otherSection")}
+                    </span>
+                    <Badge variant="secondary">{otherVisible.length}</Badge>
+                    <div className="h-px flex-1 bg-border/60" aria-hidden="true" />
+                  </div>
+                  {renderAccountsView(otherVisible)}
+                </section>
+              )}
+            </div>
+          ) : (
+            renderAccountsView(visibleAccounts)
+          )}
+        </div>
       ) : null}
+      <MarqueeSelectionBox overlayRef={overlayRef} />
     </div>
   );
 }

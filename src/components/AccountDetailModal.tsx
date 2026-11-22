@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
+import { Pencil, X } from "lucide-react";
 import { isValidBase32 } from "../lib/validators";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import type { OTPAccount } from "../types";
 
 interface AccountDetailModalProps {
   account: OTPAccount;
   mode: "detail" | "edit";
   onClose: () => void;
-  onUpdate?: (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>) => void;
+  onUpdate?: (
+    id: string,
+    updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret" | "remark">>,
+  ) => void;
 }
 
 export default function AccountDetailModal({ account, mode: initialMode, onClose, onUpdate }: AccountDetailModalProps) {
@@ -14,6 +21,7 @@ export default function AccountDetailModal({ account, mode: initialMode, onClose
   const [editName, setEditName] = useState(account.name);
   const [editIssuer, setEditIssuer] = useState(account.issuer);
   const [editSecret, setEditSecret] = useState(account.secret);
+  const [editRemark, setEditRemark] = useState(account.remark ?? "");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,13 +48,19 @@ export default function AccountDetailModal({ account, mode: initialMode, onClose
       return;
     }
 
+    const trimmedRemark = editRemark.trim();
+    const updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret" | "remark">> = {
+      name: trimmedName,
+      issuer: editIssuer.trim(),
+      secret: normalizedSecret,
+    };
+    if (trimmedRemark !== (account.remark ?? "")) {
+      updates.remark = trimmedRemark;
+    }
+
     setError(null);
     if (onUpdate) {
-      onUpdate(account.id, {
-        name: trimmedName,
-        issuer: editIssuer.trim(),
-        secret: normalizedSecret,
-      });
+      onUpdate(account.id, updates);
     }
     onClose();
   };
@@ -55,108 +69,146 @@ export default function AccountDetailModal({ account, mode: initialMode, onClose
     setEditName(account.name);
     setEditIssuer(account.issuer);
     setEditSecret(account.secret);
+    setEditRemark(account.remark ?? "");
     setError(null);
     setMode("edit");
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={mode === "detail" ? "账户详情" : "编辑账户"}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={mode === "detail" ? "账户详情" : "编辑账户"}
+    >
       {/* 遮罩层 */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
 
       {/* 弹窗内容 */}
-      <div className="relative w-full max-w-md mx-4 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-700">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
         {/* 头部 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h3 className="text-base font-semibold text-card-foreground">
             {mode === "detail" ? "账户详情" : "编辑账户"}
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {mode === "detail" && onUpdate && (
-              <button type="button" onClick={handleSwitchToEdit}
-                className="px-3 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors">
+              <Button variant="outline" size="xs" onClick={handleSwitchToEdit}>
+                <Pencil className="size-3" aria-hidden="true" />
                 编辑
-              </button>
+              </Button>
             )}
-            <button type="button" onClick={onClose} aria-label="关闭"
-              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="关闭">
+              <X className="size-4" aria-hidden="true" />
+            </Button>
           </div>
         </div>
 
         {mode === "detail" ? (
           /* 详情视图 */
-          <div className="px-6 py-5 space-y-4">
+          <div className="flex flex-col gap-4 px-6 py-5">
             <div>
-              <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">服务商 (Issuer)</span>
-              <p className="mt-1 text-gray-800 dark:text-gray-100 font-medium">{account.issuer || "未知"}</p>
+              <span className="text-xs font-medium text-muted-foreground">服务商 (Issuer)</span>
+              <p className="mt-1 text-sm font-medium text-foreground">{account.issuer || "未知"}</p>
             </div>
             <div>
-              <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">账户名称 (Name)</span>
-              <p className="mt-1 text-gray-800 dark:text-gray-100 font-medium break-all">{account.name}</p>
+              <span className="text-xs font-medium text-muted-foreground">账户名称 (Name)</span>
+              <p className="mt-1 break-all text-sm font-medium text-foreground">{account.name}</p>
             </div>
             <div>
-              <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">密钥 (Secret)</span>
-              <p className="mt-1 text-gray-800 dark:text-gray-100 font-mono text-xs break-all bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-lg">{account.secret}</p>
+              <span className="text-xs font-medium text-muted-foreground">备注 (Remark)</span>
+              <p className="mt-1 break-words text-sm text-foreground">{account.remark || "无"}</p>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div>
+              <span className="text-xs font-medium text-muted-foreground">密钥 (Secret)</span>
+              <p className="mt-1 break-all rounded-lg border border-border/70 bg-muted/50 p-2.5 font-mono text-xs text-foreground">
+                {account.secret}
+              </p>
+            </div>
+            <div className="grid grid-cols-4 gap-3 rounded-xl border border-border/70 bg-muted/35 p-3">
               <div>
-                <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">类型</span>
-                <p className="mt-1 text-gray-800 dark:text-gray-100 font-medium uppercase">{account.type}</p>
+                <span className="text-[11px] text-muted-foreground">类型</span>
+                <p className="mt-0.5 text-sm font-semibold uppercase text-foreground">{account.type}</p>
               </div>
               <div>
-                <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">位数</span>
-                <p className="mt-1 text-gray-800 dark:text-gray-100 font-medium">{account.digits}</p>
+                <span className="text-[11px] text-muted-foreground">位数</span>
+                <p className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">{account.digits}</p>
               </div>
               <div>
-                <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">周期</span>
-                <p className="mt-1 text-gray-800 dark:text-gray-100 font-medium">{account.period}s</p>
+                <span className="text-[11px] text-muted-foreground">周期</span>
+                <p className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">{account.period}s</p>
               </div>
               <div>
-                <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">算法</span>
-                <p className="mt-1 text-gray-800 dark:text-gray-100 font-medium">{account.algorithm}</p>
+                <span className="text-[11px] text-muted-foreground">算法</span>
+                <p className="mt-0.5 text-sm font-semibold text-foreground">{account.algorithm}</p>
               </div>
             </div>
             <div>
-              <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">创建时间</span>
-              <p className="mt-1 text-gray-800 dark:text-gray-100">{new Date(account.createdAt).toLocaleString()}</p>
+              <span className="text-xs font-medium text-muted-foreground">创建时间</span>
+              <p className="mt-1 text-sm text-foreground tabular-nums">{new Date(account.createdAt).toLocaleString()}</p>
             </div>
           </div>
         ) : (
           /* 编辑视图 */
-          <div className="px-6 py-5 space-y-4">
+          <div className="flex flex-col gap-4 px-6 py-5">
             <div>
-              <label htmlFor="edit-account-issuer" className="block text-xs text-gray-400 dark:text-gray-400 uppercase tracking-wide mb-1.5">服务商 (Issuer)</label>
-              <input id="edit-account-issuer" type="text" value={editIssuer} onChange={(e) => setEditIssuer(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+              <label htmlFor="edit-account-issuer" className="mb-1.5 block text-xs font-medium text-foreground">
+                服务商 (Issuer)
+              </label>
+              <Input
+                id="edit-account-issuer"
+                type="text"
+                value={editIssuer}
+                onChange={(e) => setEditIssuer(e.target.value)}
+              />
             </div>
             <div>
-              <label htmlFor="edit-account-name" className="block text-xs text-gray-400 dark:text-gray-400 uppercase tracking-wide mb-1.5">账户名称 (Name)</label>
-              <input id="edit-account-name" type="text" value={editName} onChange={(e) => { setEditName(e.target.value); if (error) setError(null); }}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+              <label htmlFor="edit-account-name" className="mb-1.5 block text-xs font-medium text-foreground">
+                账户名称 (Name)
+              </label>
+              <Input
+                id="edit-account-name"
+                type="text"
+                value={editName}
+                onChange={(e) => { setEditName(e.target.value); if (error) setError(null); }}
+              />
             </div>
             <div>
-              <label htmlFor="edit-account-secret" className="block text-xs text-gray-400 dark:text-gray-400 uppercase tracking-wide mb-1.5">密钥 (Secret)</label>
-              <input id="edit-account-secret" type="text" value={editSecret} onChange={(e) => { setEditSecret(e.target.value); if (error) setError(null); }}
-                className="w-full px-3 py-2.5 text-sm font-mono border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+              <label htmlFor="edit-account-secret" className="mb-1.5 block text-xs font-medium text-foreground">
+                密钥 (Secret)
+              </label>
+              <Input
+                id="edit-account-secret"
+                type="text"
+                value={editSecret}
+                onChange={(e) => { setEditSecret(e.target.value); if (error) setError(null); }}
+                className="font-mono"
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-account-remark" className="mb-1.5 block text-xs font-medium text-foreground">
+                备注 (Remark)
+              </label>
+              <Input
+                id="edit-account-remark"
+                type="text"
+                value={editRemark}
+                onChange={(e) => setEditRemark(e.target.value)}
+                placeholder="可选，用于标识别的内容"
+              />
             </div>
             {error && (
-              <p role="alert" className="text-xs text-red-600 dark:text-red-400">
-                {error}
-              </p>
+              <Alert variant="destructive" role="alert">
+                <AlertDescription className="opacity-100">{error}</AlertDescription>
+              </Alert>
             )}
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={handleSave}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors">
+            <div className="flex gap-2.5 pt-1">
+              <Button onClick={handleSave} className="flex-1">
                 保存
-              </button>
-              <button type="button" onClick={onClose}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+              </Button>
+              <Button variant="outline" onClick={onClose} className="flex-1">
                 取消
-              </button>
+              </Button>
             </div>
           </div>
         )}

@@ -1,19 +1,61 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import { FolderOpen, Pin, SearchX, Settings2, Trash2 } from "lucide-react";
 import AccountCard from "./AccountCard";
+import AccountListRow, { AccountListTable } from "./AccountListRow";
+import AccountToolbar from "./AccountToolbar";
 import GroupSelector from "./GroupSelector";
 import GroupManagerPanel from "./GroupManagerPanel";
 import SortControls from "./SortControls";
+import ViewModeToggle from "./ViewModeToggle";
+import CardLayoutControl from "./CardLayoutControl";
 import AccountSearchBar, { getSearchShortcutHint } from "./AccountSearchBar";
-import { filterByGroup } from "../lib/group-manager";
-import { sortAccounts } from "../lib/sorter";
-import { loadSortConfig, saveSortConfig } from "../lib/preference-store";
+import MarqueeSelectionBox from "./MarqueeSelectionBox";
+import { useMarqueeSelection } from "../hooks/useMarqueeSelection";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Separator } from "./ui/separator";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "./ui/empty";
+import { DEFAULT_GROUP_ID, filterByGroup } from "../lib/group-manager";
+import { isAccountPinned, sortAccounts } from "../lib/sorter";
+import {
+  getCardScale,
+  loadCardLayoutConfig,
+  loadSortConfig,
+  loadViewMode,
+  normalizeCardLayoutConfig,
+  saveCardLayoutConfig,
+  saveSortConfig,
+  saveViewMode,
+} from "../lib/preference-store";
 import {
   buildGroupNameMap,
   filterAccountsByQuery,
   normalizeSearchQuery,
 } from "../lib/account-search";
 import { useOptionalI18n } from "../contexts/I18nContext";
-import type { OTPAccount, Group, SortConfig } from "../types";
+import type {
+  AccountViewMode,
+  CardLayoutConfig,
+  OTPAccount,
+  Group,
+  SortConfig,
+} from "../types";
+
+const noopRefresh = async () => {};
 
 interface GroupPageProps {
   groups: Group[];
@@ -22,9 +64,20 @@ interface GroupPageProps {
   onRenameGroup: (groupId: string, newName: string) => Promise<void> | void;
   onDeleteGroup: (groupId: string) => Promise<void> | void;
   onDeleteAccount: (id: string) => void;
-  onUpdateAccount?: (id: string, updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret">>) => void;
+  onBatchDelete?: (ids: string[]) => Promise<void> | void;
+  onUpdateAccount?: (
+    id: string,
+    updates: Partial<Pick<OTPAccount, "name" | "issuer" | "secret" | "remark">>,
+  ) => void;
+  onBatchSetPinned?: (accountIds: string[], pinned: boolean) => Promise<void> | void;
+  onBatchMoveToGroup?: (accountIds: string[], groupId: string) => Promise<void> | void;
+  onRefresh?: () => Promise<void>;
+  selectedIds?: Set<string>;
+  onSelectedIdsChange?: (ids: Set<string>) => void;
   focusSearchTick?: number;
   onSearchInAllAccounts?: (query: string) => void;
+  cardLayout?: CardLayoutConfig;
+  onCardLayoutChange?: (config: CardLayoutConfig) => void;
 }
 
 export default function GroupPage({
@@ -34,20 +87,88 @@ export default function GroupPage({
   onRenameGroup,
   onDeleteGroup,
   onDeleteAccount,
+  onBatchDelete,
   onUpdateAccount,
+  onBatchSetPinned,
+  onBatchMoveToGroup,
+  onRefresh,
+  selectedIds,
+  onSelectedIdsChange,
   focusSearchTick,
   onSearchInAllAccounts,
+  cardLayout,
+  onCardLayoutChange,
 }: GroupPageProps) {
   const { t } = useOptionalI18n();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showManager, setShowManager] = useState(false);
+  const [pendingDeleteGroup, setPendingDeleteGroup] = useState<Group | null>(null);
+  const [deletingGroup, setDeletingGroup] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>(loadSortConfig);
+  const [viewMode, setViewMode] = useState<AccountViewMode>(loadViewMode);
+  const [internalCardLayout, setInternalCardLayout] = useState<CardLayoutConfig>(
+    loadCardLayoutConfig,
+  );
   const [searchQuery, setSearchQuery] = useState("");
+  const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const isControlledCardLayout =
+    cardLayout !== undefined && onCardLayoutChange !== undefined;
+  const effectiveCardLayout = isControlledCardLayout
+    ? cardLayout
+    : internalCardLayout;
+  const handleCardLayoutChange = useCallback(
+    (nextConfig: CardLayoutConfig) => {
+      const normalized = normalizeCardLayoutConfig(nextConfig);
+      if (isControlledCardLayout) {
+        onCardLayoutChange(normalized);
+      } else {
+        setInternalCardLayout(normalized);
+        saveCardLayoutConfig(normalized);
+      }
+    },
+    [isControlledCardLayout, onCardLayoutChange],
+  );
+
+  const cardScale = useMemo(
+    () => getCardScale(effectiveCardLayout.cardMinWidth),
+    [effectiveCardLayout.cardMinWidth],
+  );
+  const cardGridStyle = useMemo(
+    () => ({
+      gridTemplateColumns: `repeat(auto-fill, minmax(${effectiveCardLayout.cardMinWidth}px, 1fr))`,
+      gap: `${effectiveCardLayout.cardGap}px`,
+    }),
+    [effectiveCardLayout.cardGap, effectiveCardLayout.cardMinWidth],
+  );
+
+  const isControlledSelection =
+    selectedIds !== undefined && onSelectedIdsChange !== undefined;
+  const currentSelectedIds = isControlledSelection
+    ? selectedIds
+    : internalSelectedIds;
+  const updateSelectedIds = useCallback(
+    (next: Set<string>) => {
+      if (isControlledSelection) {
+        onSelectedIdsChange(next);
+      } else {
+        setInternalSelectedIds(next);
+      }
+    },
+    [isControlledSelection, onSelectedIdsChange],
+  );
 
   const handleSortChange = useCallback((config: SortConfig) => {
     setSortConfig(config);
     saveSortConfig(config);
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: AccountViewMode) => {
+    setViewMode(mode);
+    saveViewMode(mode);
   }, []);
 
   // 默认选中第一个分组
@@ -106,6 +227,32 @@ export default function GroupPage({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (!pendingDeleteGroup) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !deletingGroup) {
+        setPendingDeleteGroup(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [pendingDeleteGroup, deletingGroup]);
+
+  const selectedGroup = useMemo(
+    () => groups.find((group) => group.id === selectedGroupId) ?? null,
+    [groups, selectedGroupId],
+  );
+
+  const defaultGroup = useMemo(
+    () => groups.find((group) => group.isDefault || group.id === DEFAULT_GROUP_ID) ?? null,
+    [groups],
+  );
+
+  const isSelectedDefault =
+    !selectedGroup || selectedGroup.isDefault || selectedGroup.id === DEFAULT_GROUP_ID;
+
   const groupNameById = useMemo(() => buildGroupNameMap(groups), [groups]);
   const hasActiveQuery = normalizeSearchQuery(searchQuery) !== "";
 
@@ -124,6 +271,106 @@ export default function GroupPage({
     [selectedAccounts, searchQuery, groupNameById],
   );
 
+  const visibleIdSet = useMemo(
+    () => new Set(visibleAccounts.map((account) => account.id)),
+    [visibleAccounts],
+  );
+
+  const effectiveSelectedIds = useMemo(() => {
+    if (currentSelectedIds.size === 0) {
+      return currentSelectedIds;
+    }
+    let changed = false;
+    const next = new Set<string>();
+    for (const id of currentSelectedIds) {
+      if (visibleIdSet.has(id)) {
+        next.add(id);
+      } else {
+        changed = true;
+      }
+    }
+    return changed ? next : currentSelectedIds;
+  }, [currentSelectedIds, visibleIdSet]);
+
+  const effectiveSelectedIdsRef = useRef(effectiveSelectedIds);
+  const visibleIdSetRef = useRef(visibleIdSet);
+  useLayoutEffect(() => {
+    effectiveSelectedIdsRef.current = effectiveSelectedIds;
+    visibleIdSetRef.current = visibleIdSet;
+  }, [effectiveSelectedIds, visibleIdSet]);
+
+  useEffect(() => {
+    if (effectiveSelectedIds !== currentSelectedIds) {
+      updateSelectedIds(effectiveSelectedIds);
+    }
+  }, [effectiveSelectedIds, currentSelectedIds, updateSelectedIds]);
+
+  const clearSelection = useCallback(() => {
+    updateSelectedIds(new Set());
+  }, [updateSelectedIds]);
+
+  const handleSelectGroup = useCallback(
+    (groupId: string | null) => {
+      if (groupId !== selectedGroupId) {
+        clearSelection();
+      }
+      setSelectedGroupId(groupId);
+    },
+    [clearSelection, selectedGroupId],
+  );
+
+  const updateSearchQuery = useCallback(
+    (nextQuery: string) => {
+      if (normalizeSearchQuery(nextQuery) !== normalizeSearchQuery(searchQuery)) {
+        clearSelection();
+      }
+      setSearchQuery(nextQuery);
+    },
+    [clearSelection, searchQuery],
+  );
+
+  const handleClearSearch = useCallback(() => {
+    updateSearchQuery("");
+  }, [updateSearchQuery]);
+
+  const toggleSelect = useCallback(
+    (id: string) => {
+      if (!visibleIdSetRef.current.has(id)) {
+        return;
+      }
+      const next = new Set(effectiveSelectedIdsRef.current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      updateSelectedIds(next);
+    },
+    [updateSelectedIds],
+  );
+
+  const toggleSelectAll = useCallback(() => {
+    const allVisibleSelected =
+      visibleAccounts.length > 0 &&
+      visibleAccounts.every((account) => effectiveSelectedIds.has(account.id));
+
+    if (allVisibleSelected) {
+      updateSelectedIds(new Set());
+    } else {
+      updateSelectedIds(new Set(visibleAccounts.map((account) => account.id)));
+    }
+  }, [effectiveSelectedIds, updateSelectedIds, visibleAccounts]);
+
+  const { pinnedVisible, otherVisible } = useMemo(() => {
+    const pinned: OTPAccount[] = [];
+    const other: OTPAccount[] = [];
+    for (const account of visibleAccounts) {
+      if (isAccountPinned(account)) {
+        pinned.push(account);
+      } else {
+        other.push(account);
+      }
+    }
+    return { pinnedVisible: pinned, otherVisible: other };
+  }, [visibleAccounts]);
+
   const globalMatchesCount = useMemo(() => {
     if (!hasActiveQuery || visibleAccounts.length > 0) {
       return 0;
@@ -132,47 +379,198 @@ export default function GroupPage({
   }, [accounts, groupNameById, hasActiveQuery, searchQuery, visibleAccounts.length]);
 
   const shortcutHint = useMemo(() => getSearchShortcutHint(), []);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const { overlayRef, handleMouseDown } = useMarqueeSelection({
+    containerRef,
+    enabled: Boolean(selectedGroupId) && visibleAccounts.length > 0,
+    selectedIds: effectiveSelectedIds,
+    visibleIdSet,
+    onSelectionChange: updateSelectedIds,
+  });
+
+  const handleConfirmDeleteGroup = async () => {
+    if (!pendingDeleteGroup || deletingGroup) {
+      return;
+    }
+    setDeletingGroup(true);
+    try {
+      await onDeleteGroup(pendingDeleteGroup.id);
+      setPendingDeleteGroup(null);
+      handleSelectGroup(defaultGroup?.id ?? null);
+    } finally {
+      setDeletingGroup(false);
+    }
+  };
+
+  const renderAccountsView = (items: OTPAccount[]) => {
+    if (viewMode === "list") {
+      return (
+        <AccountListTable showGroupColumn={false}>
+          {items.map((account) => (
+            <AccountListRow
+              key={account.id}
+              account={account}
+              showGroupColumn={false}
+              onDelete={onDeleteAccount}
+              onUpdate={onUpdateAccount}
+              selected={effectiveSelectedIds.has(account.id)}
+              onToggleSelect={toggleSelect}
+            />
+          ))}
+        </AccountListTable>
+      );
+    }
+
+    return (
+      <div className="grid" style={cardGridStyle} data-card-scale={cardScale}>
+        {items.map((account) => (
+          <AccountCard
+            key={account.id}
+            account={account}
+            onDelete={onDeleteAccount}
+            onUpdate={onUpdateAccount}
+            selected={effectiveSelectedIds.has(account.id)}
+            onToggleSelect={toggleSelect}
+          />
+        ))}
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-4 px-4 pt-4 pb-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">分组管理</h2>
-
-      {/* 顶部工具栏：下拉选择器 + 管理按钮 + 排序 */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="w-52">
-          <GroupSelector
-            groups={groups}
-            selectedGroupId={selectedGroupId}
-            onSelect={(id) => setSelectedGroupId(id)}
-            accounts={accounts}
+    <div
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      className="flex flex-1 flex-col gap-5 px-6 py-5"
+    >
+      <div
+        data-no-marquee="true"
+        className="flex flex-wrap items-center justify-between gap-3"
+      >
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">分组管理</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <ViewModeToggle value={viewMode} onChange={handleViewModeChange} />
+          <CardLayoutControl
+            config={effectiveCardLayout}
+            onChange={handleCardLayoutChange}
+            viewMode={viewMode}
           />
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowManager(true)}
-          aria-label="打开分组管理"
-          className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          title="分组管理"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
-        <div className="ml-auto">
-          <SortControls config={sortConfig} onChange={handleSortChange} />
         </div>
       </div>
 
-      {selectedGroupId && accounts.length > 0 && (
-        <AccountSearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          onClear={() => setSearchQuery("")}
-          inputRef={searchInputRef}
-          shortcutHint={shortcutHint}
-          compact
-        />
+      {/* ReUI 统一分组工具栏 */}
+      <div
+        data-no-marquee="true"
+        className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-3 shadow-2xs"
+      >
+        <div className="w-52 shrink-0">
+          <GroupSelector
+            groups={groups}
+            selectedGroupId={selectedGroupId}
+            onSelect={handleSelectGroup}
+            accounts={accounts}
+          />
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setShowManager(true)}
+          aria-label="打开分组管理"
+          title="分组管理"
+          className="shrink-0"
+        >
+          <Settings2 className="size-4" aria-hidden="true" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isSelectedDefault || deletingGroup}
+          onClick={() => selectedGroup && setPendingDeleteGroup(selectedGroup)}
+          aria-label="删除当前分组"
+          title={
+            isSelectedDefault
+              ? "默认分组不可删除"
+              : "删除当前分组（组内账户将自动移入默认分组）"
+          }
+          className="shrink-0 text-muted-foreground hover:border-destructive/40 hover:bg-destructive-surface hover:text-destructive-foreground disabled:pointer-events-none disabled:opacity-50"
+        >
+          <Trash2 className="size-3.5" aria-hidden="true" />
+          <span>删除分组</span>
+        </Button>
+
+        {selectedGroupId && accounts.length > 0 && (
+          <div className="order-last min-w-[220px] flex-1 basis-full lg:order-none lg:basis-auto">
+            <AccountSearchBar
+              value={searchQuery}
+              onChange={updateSearchQuery}
+              onClear={handleClearSearch}
+              inputRef={searchInputRef}
+              shortcutHint={shortcutHint}
+              compact
+            />
+          </div>
+        )}
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Separator orientation="vertical" className="hidden h-6 sm:block" />
+          <SortControls config={sortConfig} onChange={handleSortChange} />
+          <Separator orientation="vertical" className="hidden h-6 sm:block" />
+          <AccountToolbar
+            accounts={visibleAccounts}
+            groups={groups}
+            selectedIds={effectiveSelectedIds}
+            onDelete={onDeleteAccount}
+            onBatchDelete={onBatchDelete}
+            onBatchSetPinned={onBatchSetPinned}
+            onBatchMoveToGroup={onBatchMoveToGroup}
+            onRefresh={onRefresh ?? noopRefresh}
+            onToggleSelectAll={toggleSelectAll}
+            onClearSelection={clearSelection}
+          />
+        </div>
+      </div>
+
+      {/* 删除当前分组确认弹窗 */}
+      {pendingDeleteGroup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="确认删除分组"
+        >
+          <div
+            className="absolute inset-0 bg-black/45 backdrop-blur-xs"
+            onClick={() => !deletingGroup && setPendingDeleteGroup(null)}
+            aria-hidden="true"
+          />
+          <div className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-2xl">
+            <h3 className="text-base font-semibold text-foreground">删除分组</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {selectedAccounts.length > 0
+                ? `确定要删除分组「${pendingDeleteGroup.name}」吗？该分组下的 ${selectedAccounts.length} 个账户将自动移入「${defaultGroup?.name ?? "默认"}」分组，不会丢失。`
+                : `确定要删除分组「${pendingDeleteGroup.name}」吗？`}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingDeleteGroup(null)}
+                disabled={deletingGroup}
+              >
+                取消
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleConfirmDeleteGroup()}
+                disabled={deletingGroup}
+              >
+                {deletingGroup ? "删除中..." : "确认删除"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 分组管理面板 */}
@@ -187,58 +585,91 @@ export default function GroupPage({
         />
       )}
 
-      {/* 账户卡片网格 */}
+      {/* 账户视图 */}
       {selectedGroupId ? (
         selectedAccounts.length === 0 && !hasActiveQuery ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
-            </svg>
-            <p className="text-sm">该分组下暂无账户</p>
-          </div>
+          <Empty className="py-16">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <FolderOpen aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>该分组下暂无账户</EmptyTitle>
+              <EmptyDescription>可将账户移动至此分组</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : visibleAccounts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-white/70 dark:bg-gray-800/40 py-14 px-4 text-center">
-            <p className="text-base font-medium text-gray-700 dark:text-gray-200">
-              未找到匹配「{searchQuery.trim()}」的账户
-            </p>
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <Empty className="py-14">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <SearchX aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>
+                未找到匹配「{searchQuery.trim()}」的账户
+              </EmptyTitle>
+            </EmptyHeader>
+            <EmptyContent>
               {globalMatchesCount > 0 && onSearchInAllAccounts && (
-                <button
-                  type="button"
+                <Button
+                  size="sm"
                   onClick={() => onSearchInAllAccounts(searchQuery)}
-                  className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                 >
                   在全部账户中查看 {globalMatchesCount} 个结果
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => {
-                  setSearchQuery("");
+                  handleClearSearch();
                   searchInputRef.current?.focus();
                 }}
-                className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
               >
                 {t("accounts.clearSearch")}
-              </button>
-            </div>
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : pinnedVisible.length > 0 ? (
+          <div className="flex flex-col gap-6">
+            <section aria-label={t("accounts.pinnedSection")} className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Pin className="size-3.5 text-pin shrink-0" aria-hidden="true" />
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {t("accounts.pinnedSection")}
+                </span>
+                <Badge variant="secondary">{pinnedVisible.length}</Badge>
+                <div className="h-px flex-1 bg-border/60" aria-hidden="true" />
+              </div>
+              {renderAccountsView(pinnedVisible)}
+            </section>
+
+            {otherVisible.length > 0 && (
+              <section aria-label={t("accounts.otherSection")} className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {t("accounts.otherSection")}
+                  </span>
+                  <Badge variant="secondary">{otherVisible.length}</Badge>
+                  <div className="h-px flex-1 bg-border/60" aria-hidden="true" />
+                </div>
+                {renderAccountsView(otherVisible)}
+              </section>
+            )}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleAccounts.map((account) => (
-              <AccountCard key={account.id} account={account} onDelete={onDeleteAccount} onUpdate={onUpdateAccount} />
-            ))}
-          </div>
+          renderAccountsView(visibleAccounts)
         )
       ) : (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-          <svg className="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
-          </svg>
-          <p className="text-base font-medium mb-1">暂无分组</p>
-          <p className="text-sm">请先创建一个分组</p>
-        </div>
+        <Empty className="py-16">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <FolderOpen aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>暂无分组</EmptyTitle>
+            <EmptyDescription>请先创建一个分组</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
+      <MarqueeSelectionBox overlayRef={overlayRef} />
     </div>
   );
 }

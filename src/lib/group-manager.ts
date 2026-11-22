@@ -113,7 +113,7 @@ export function deleteGroup(
   if (!target) {
     throw new ValidationError("分组不存在", "groupId");
   }
-  if (target.isDefault) {
+  if (target.isDefault || target.id === DEFAULT_GROUP_ID) {
     throw new ValidationError("默认分组不可删除", "groupId");
   }
   const defaultGroup = getDefaultGroup(groups);

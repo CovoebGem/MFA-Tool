@@ -270,4 +270,22 @@ describe("HomePage", () => {
     ]);
     expect(onDedupDetected).not.toHaveBeenCalled();
   });
+
+  it("does not render pinned accounts quick access section even when pinned accounts exist", () => {
+    const groups: Group[] = [{ id: "default", name: "默认", isDefault: true, createdAt: 0, updatedAt: 0 }];
+
+    render(
+      <HomePage
+        accounts={[{ ...decodedAccount, pinned: true, pinnedAt: 500 }]}
+        groups={groups}
+        onAccountsAdded={vi.fn()}
+        onGroupsUpdated={vi.fn()}
+        onDedupDetected={vi.fn()}
+        onToast={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("已置顶账户")).not.toBeInTheDocument();
+    expect(screen.queryByText("GitHub")).not.toBeInTheDocument();
+  });
 });

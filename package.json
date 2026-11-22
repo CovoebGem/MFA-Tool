@@ -1,7 +1,7 @@
 {
   "name": "mfa-tool",
   "private": true,
-  "version": "0.3.9",
+  "version": "0.4.0",
   "description": "Desktop TOTP authenticator built with Tauri and React",
   "license": "MIT",
   "repository": {
@@ -28,11 +28,15 @@
     "@tauri-apps/plugin-fs": "^2.4.5",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "jsqr": "^1.4.0",
+    "lucide-react": "^1.77.0",
     "otpauth": "^9.5.0",
     "protobufjs": "^8.0.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.7.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

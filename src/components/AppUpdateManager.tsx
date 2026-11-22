@@ -1,19 +1,20 @@
+import { ArrowUpCircle } from "lucide-react";
 import UpdateDialog from "./UpdateDialog";
 import { useAppUpdater } from "../hooks/useAppUpdater";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
 
 interface AppUpdateManagerProps {
   onToast: (message: string, type: "success" | "error") => void;
+  variant?: "default" | "sidebar";
+  collapsed?: boolean;
 }
 
-function UpdateIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V6.75m0 0L8.25 10.5M12 6.75l3.75 3.75M4.5 15.75v1.125A2.625 2.625 0 007.125 19.5h9.75A2.625 2.625 0 0019.5 16.875V15.75" />
-    </svg>
-  );
-}
-
-export default function AppUpdateManager({ onToast }: AppUpdateManagerProps) {
+export default function AppUpdateManager({
+  onToast,
+  variant = "default",
+  collapsed = false,
+}: AppUpdateManagerProps) {
   const {
     supported,
     availableUpdate,
@@ -76,22 +77,50 @@ export default function AppUpdateManager({ onToast }: AppUpdateManagerProps) {
   })();
 
   const buttonClassName = restartReady
-    ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-500/40 dark:bg-green-500/15 dark:text-green-200 dark:hover:bg-green-500/20"
+    ? "border-success/35 bg-success-surface text-success-foreground hover:bg-success/15"
     : availableUpdate
-      ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200 dark:hover:bg-amber-500/20"
-      : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600";
+      ? "border-warning/40 bg-warning-surface text-warning-foreground hover:bg-warning/15"
+      : undefined;
 
   return (
     <>
-      <button
-        type="button"
-        onClick={restartReady ? restartToApplyUpdate : openUpdateDialog}
-        disabled={checking || installing}
-        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${buttonClassName}`}
-      >
-        <UpdateIcon className="h-4 w-4" />
-        {buttonLabel}
-      </button>
+      {variant === "sidebar" && collapsed ? (
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={restartReady ? restartToApplyUpdate : openUpdateDialog}
+          disabled={checking || installing}
+          aria-label={buttonLabel}
+          title={buttonLabel}
+          className={cn("relative size-10 shrink-0", buttonClassName)}
+        >
+          <ArrowUpCircle className="size-4 shrink-0" aria-hidden="true" />
+          {(availableUpdate || restartReady) && (
+            <span
+              className={cn(
+                "absolute top-1.5 right-1.5 size-2 rounded-full",
+                restartReady ? "bg-success" : "bg-warning",
+              )}
+              aria-hidden="true"
+            />
+          )}
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={restartReady ? restartToApplyUpdate : openUpdateDialog}
+          disabled={checking || installing}
+          title={buttonLabel}
+          className={cn(
+            variant === "sidebar" && "w-full justify-center",
+            buttonClassName,
+          )}
+        >
+          <ArrowUpCircle className="size-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{buttonLabel}</span>
+        </Button>
+      )}
 
       {availableUpdate && (
         <UpdateDialog

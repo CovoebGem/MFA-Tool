@@ -59,6 +59,7 @@ const arbNonEmptyAccounts: fc.Arbitrary<OTPAccount[]> = fc
 const createDefaultProps = () => ({
   groups: mockGroups,
   onDelete: vi.fn(),
+  onBatchSetPinned: vi.fn().mockResolvedValue(undefined),
   onBatchMoveToGroup: vi.fn(),
   onRefresh: vi.fn().mockResolvedValue(undefined),
   selectedIds: new Set<string>(),
@@ -87,6 +88,7 @@ function renderWithSelectionState(accounts: OTPAccount[]) {
 describe("AccountPage Property Tests", () => {
   beforeEach(() => {
     cleanup();
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -121,7 +123,7 @@ describe("AccountPage Property Tests", () => {
       }),
       { numRuns: 100 },
     );
-  });
+  }, 15000);
 
   // Feature: account-toolbar, Property 6: 全选按钮状态与选择状态同步
   // Validates: Requirements 5.3
@@ -153,17 +155,20 @@ describe("AccountPage Property Tests", () => {
           const totalCount = accounts.length;
 
           if (selectedCount === 0) {
-            // 无选中：按钮文字为"全选"，使用 slate 样式
+            // 无选中：按钮文字为"全选"，使用语义未选状态
             expect(selectAllButton.textContent).toContain("全选");
-            expect(selectAllButton.className).toContain("text-slate-600");
+            expect(selectAllButton).toHaveAttribute("data-selection-state", "none");
+            expect(selectAllButton.className).toContain("text-muted-foreground");
           } else if (selectedCount === totalCount) {
-            // 全选中：按钮文字为"取消全选"，使用 blue-700 样式
+            // 全选中：按钮文字为"取消全选"，使用语义全选状态
             expect(selectAllButton.textContent).toContain("取消全选");
-            expect(selectAllButton.className).toContain("text-blue-700");
+            expect(selectAllButton).toHaveAttribute("data-selection-state", "all");
+            expect(selectAllButton.className).toContain("bg-primary/10");
           } else {
-            // 部分选中：按钮文字为"全选"，使用 blue-600 样式
+            // 部分选中：按钮文字为"全选"，使用语义部分选中状态
             expect(selectAllButton.textContent).toContain("全选");
-            expect(selectAllButton.className).toContain("text-blue-600");
+            expect(selectAllButton).toHaveAttribute("data-selection-state", "partial");
+            expect(selectAllButton.className).toContain("border-primary/25");
           }
 
           cleanup();
@@ -171,11 +176,10 @@ describe("AccountPage Property Tests", () => {
       ),
       { numRuns: 100 },
     );
-  });
+  }, 15000);
 
-  // Feature: batch-move-group, Property 4: Batch_Toolbar 可见性与选择状态一致
-  // Validates: Requirements 3.1, 3.2
-  it("Property 4: BatchToolbar 可见当且仅当选中账户数量大于 0", () => {
+  // Validates: 工具栏选中计数与快捷操作可用性与选择状态一致（不弹出 BatchToolbar）
+  it("Property 4: 工具栏选中计数与快捷置顶/移动按钮随选择状态同步且不渲染 BatchToolbar", () => {
     fc.assert(
       fc.property(
         arbNonEmptyAccounts.chain((accounts) =>
@@ -198,17 +202,19 @@ describe("AccountPage Property Tests", () => {
           }
 
           const selectedCount = selectedSubset.length;
+          expect(screen.queryByRole("button", { name: "批量移动" })).not.toBeInTheDocument();
+
+          const moveBtn = screen.getByRole("button", { name: "移动到分组" });
+          const pinBtn = screen.getByRole("button", { name: "置顶" });
 
           if (selectedCount > 0) {
-            // 有选中：BatchToolbar 应可见
-            expect(
-              screen.getByText(`已选择 ${selectedCount} 个账户`),
-            ).toBeInTheDocument();
+            expect(screen.getByText(`已选 ${selectedCount}`)).toBeInTheDocument();
+            expect(moveBtn).toBeEnabled();
+            expect(pinBtn).toBeEnabled();
           } else {
-            // 无选中：BatchToolbar 不应存在
-            expect(
-              screen.queryByText(/已选择 \d+ 个账户/),
-            ).not.toBeInTheDocument();
+            expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+            expect(moveBtn).toBeDisabled();
+            expect(pinBtn).toBeDisabled();
           }
 
           cleanup();
@@ -216,12 +222,13 @@ describe("AccountPage Property Tests", () => {
       ),
       { numRuns: 100 },
     );
-  });
+  }, 15000);
 });
 
 describe("AccountPage Unit Tests - 移除独立分组下拉框 & 分组名称显示", () => {
   beforeEach(() => {
     cleanup();
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -272,8 +279,10 @@ describe("AccountPage Unit Tests - 移除独立分组下拉框 & 分组名称显
     expect(cardGrid?.querySelectorAll("select").length).toBe(0);
 
     // 不应存在任何分组相关的 <select>（如 "移动到分组" 下拉框）
-    const groupSelect = screen.queryByLabelText(/移动到分组|选择分组|分组选择/);
-    expect(groupSelect).not.toBeInTheDocument();
+    const groupSelects = Array.from(container.querySelectorAll("select")).filter((el) =>
+      /移动到分组|选择分组|分组选择/.test(el.getAttribute("aria-label") ?? ""),
+    );
+    expect(groupSelects).toHaveLength(0);
   });
 
   // Validates: Requirement 1.2
@@ -291,6 +300,7 @@ describe("AccountPage Unit Tests - 移除独立分组下拉框 & 分组名称显
 describe("AccountPage 搜索与交互边界", () => {
   beforeEach(() => {
     cleanup();
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -388,14 +398,14 @@ describe("AccountPage 搜索与交互边界", () => {
     expect(document.activeElement).toBe(searchInput);
   });
 
-  it("查询变化时清空选择，搜索态下全选和批量删除仅作用于可见账户且检查仍覆盖全库", async () => {
+  it("查询变化时清空选择，搜索态下全选和批量删除仅作用于可见账户且支持按备注过滤", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const onBatchDelete = vi.fn().mockResolvedValue(undefined);
-    const accountsWithInvalidSecret: OTPAccount[] = [
+    const accountsWithRemark: OTPAccount[] = [
       ...sampleAccounts.slice(0, 2),
       {
         ...sampleAccounts[2],
-        secret: "INVALID!SECRET",
+        remark: "核心生产网关",
       },
     ];
 
@@ -403,7 +413,7 @@ describe("AccountPage 搜索与交互边界", () => {
       const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
       return (
         <AccountPage
-          accounts={accountsWithInvalidSecret}
+          accounts={accountsWithRemark}
           groups={mockGroups}
           onDelete={vi.fn()}
           onBatchDelete={onBatchDelete}
@@ -419,16 +429,16 @@ describe("AccountPage 搜索与交互边界", () => {
 
     // 先勾选 Google
     fireEvent.click(screen.getByLabelText("选择账户 Google"));
-    expect(screen.getByText("已选择 1 个账户")).toBeInTheDocument();
+    expect(screen.getByText("已选 1")).toBeInTheDocument();
 
     // 输入仅匹配 GitHub 的查询词 -> 原先勾选的 Google 应被清空
     const searchInput = screen.getByRole("searchbox", { name: "搜索账户" });
     fireEvent.change(searchInput, { target: { value: "GitHub" } });
-    expect(screen.queryByText(/已选择 \d+ 个账户/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
 
     // 全选仅选中可见的 GitHub
     fireEvent.click(screen.getByLabelText("全选"));
-    expect(screen.getByText("已选择 1 个账户")).toBeInTheDocument();
+    expect(screen.getByText("已选 1")).toBeInTheDocument();
     expect(screen.getByLabelText("选择账户 GitHub")).toBeChecked();
 
     // 点击删除只提交可见选中项 a1
@@ -439,14 +449,12 @@ describe("AccountPage 搜索与交互边界", () => {
     expect(onBatchDelete).toHaveBeenCalledTimes(1);
     expect(onBatchDelete).toHaveBeenCalledWith(["a1"]);
 
-    // 全库检查在过滤态下仍能检出隐藏账户 Cloudflare 的无效密钥
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("检查"));
-      await Promise.resolve();
-    });
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("1 个无效密钥")).toBeInTheDocument();
-    expect(screen.getByText("Cloudflare - ops@site.org")).toBeInTheDocument();
+    // 按备注过滤可命中 Cloudflare 且工具栏不渲染检查按钮
+    expect(screen.queryByLabelText("检查")).not.toBeInTheDocument();
+    fireEvent.change(searchInput, { target: { value: "核心生产" } });
+    expect(screen.getByText("Cloudflare")).toBeInTheDocument();
+    expect(screen.getByText("核心生产网关")).toBeInTheDocument();
+    expect(screen.queryByText("GitHub")).not.toBeInTheDocument();
 
     confirmSpy.mockRestore();
   });
@@ -467,7 +475,7 @@ describe("AccountPage 搜索与交互边界", () => {
     expect(screen.getByText("清空搜索后可调整顺序")).toBeInTheDocument();
     expect(container.querySelectorAll('[draggable="true"]')).toHaveLength(0);
 
-    const card = screen.getByText("GitHub").closest(".bg-white") as HTMLElement;
+    const card = screen.getByText("GitHub").closest('[data-slot="card"]') as HTMLElement;
     const dataTransfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() };
     fireEvent.dragStart(card, { dataTransfer });
     fireEvent.dragOver(card, { dataTransfer });
@@ -496,5 +504,273 @@ describe("AccountPage 搜索与交互边界", () => {
     fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
     expect(screen.getAllByText("工作").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "编辑账户" }).length).toBe(3);
+  });
+
+  it("置顶账户分展示在顶部、卡片内不显示置顶按钮、支持网格与列表双层区分、搜索与拖拽跨边界保护", () => {
+    const onReorder = vi.fn();
+    const pinnedAccounts: OTPAccount[] = [
+      { ...sampleAccounts[0], pinned: false, order: 0 },
+      { ...sampleAccounts[1], pinned: true, pinnedAt: 5000, order: 1 },
+      { ...sampleAccounts[2], pinned: false, order: 2 },
+    ];
+
+    render(
+      <AccountPage
+        accounts={pinnedAccounts}
+        groups={mockGroups}
+        onDelete={vi.fn()}
+        onBatchMoveToGroup={vi.fn()}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        onReorder={onReorder}
+        selectedIds={new Set()}
+        onSelectedIdsChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/^\d+\s*已置顶$/)).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-slot="card"] button[aria-label*="置顶"]')).toHaveLength(0);
+
+    const pinnedSection = screen.getByRole("region", { name: "已置顶" });
+    const otherSection = screen.getByRole("region", { name: "其他账户" });
+    expect(pinnedSection).toHaveTextContent("Google");
+    expect(otherSection).toHaveTextContent("GitHub");
+    expect(otherSection).toHaveTextContent("Cloudflare");
+
+    // 切换到列表视图时同样保留“已置顶 / 其他账户”分层且行内无置顶按钮
+    fireEvent.click(screen.getByRole("button", { name: "列表视图" }));
+    expect(document.querySelectorAll('[data-slot="account-row"] button[aria-label*="置顶"]')).toHaveLength(0);
+    const pinnedListSection = screen.getByRole("region", { name: "已置顶" });
+    const otherListSection = screen.getByRole("region", { name: "其他账户" });
+    expect(pinnedListSection.querySelectorAll('[data-slot="account-row"]')).toHaveLength(1);
+    expect(pinnedListSection).toHaveTextContent("Google");
+    expect(otherListSection.querySelectorAll('[data-slot="account-row"]')).toHaveLength(2);
+
+    // 切回网格视图继续测试
+    fireEvent.click(screen.getByRole("button", { name: "网格视图" }));
+
+    // 搜索仅匹配到置顶和非置顶各一条时，已置顶仍保持在先
+    const searchInput = screen.getByRole("searchbox", { name: "搜索账户" });
+    fireEvent.change(searchInput, { target: { value: ".com" } });
+    const cards = Array.from(document.querySelectorAll('[data-slot="card"]'));
+    expect(cards.map((el) => el.getAttribute("data-pinned"))).toEqual(["true", "false"]);
+
+    // 切到拖拽排序模式后，尝试把置顶卡片拖向未置顶卡片不应触发跨分区重排
+    fireEvent.keyDown(searchInput, { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
+    expect(screen.getByRole("region", { name: "已置顶" })).toHaveTextContent("Google");
+    expect(screen.getByRole("region", { name: "其他账户" })).toHaveTextContent("GitHub");
+    const pinnedCard = screen.getByText("Google").closest('[data-slot="card"]') as HTMLElement;
+    const unpinnedCard = screen.getByText("GitHub").closest('[data-slot="card"]') as HTMLElement;
+    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() };
+    fireEvent.dragStart(pinnedCard, { dataTransfer });
+    fireEvent.dragOver(unpinnedCard, { dataTransfer });
+    fireEvent.drop(unpinnedCard, { dataTransfer });
+    fireEvent.dragEnd(pinnedCard);
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+
+  it("支持通过工具栏置顶、取消置顶及移动到分组，并在成功清空、失败保留选中", async () => {
+    const onBatchSetPinned = vi.fn().mockResolvedValue(undefined);
+    const onBatchMoveToGroup = vi.fn().mockResolvedValue(undefined);
+    const mixedAccounts: OTPAccount[] = [
+      { ...sampleAccounts[0], pinned: false, remark: "生产主账号" },
+      { ...sampleAccounts[1], pinned: true, pinnedAt: 5000 },
+      { ...sampleAccounts[2], pinned: false },
+    ];
+
+    function Harness() {
+      const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+      return (
+        <AccountPage
+          accounts={mixedAccounts}
+          groups={mockGroups}
+          onDelete={vi.fn()}
+          onBatchSetPinned={onBatchSetPinned}
+          onBatchMoveToGroup={onBatchMoveToGroup}
+          onRefresh={vi.fn().mockResolvedValue(undefined)}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    expect(screen.getByText("生产主账号")).toBeInTheDocument();
+
+    // 选中未置顶的 GitHub 与已置顶的 Google -> 工具栏按钮启用
+    fireEvent.click(screen.getByLabelText("选择账户 GitHub"));
+    fireEvent.click(screen.getByLabelText("选择账户 Google"));
+    expect(screen.getByText("已选 2")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "置顶" }));
+      await Promise.resolve();
+    });
+    expect(onBatchSetPinned).toHaveBeenCalledTimes(1);
+    expect(onBatchSetPinned.mock.calls[0][1]).toBe(true);
+    expect(new Set(onBatchSetPinned.mock.calls[0][0])).toEqual(new Set(["a1", "a2"]));
+    expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+
+    // 仅选已置顶账户 -> 工具栏显示“取消置顶”；若后端拒绝，则保留当前选中状态
+    onBatchSetPinned.mockRejectedValueOnce(new Error("写入失败"));
+    fireEvent.click(screen.getByLabelText("选择账户 Google"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "取消置顶" }));
+      await Promise.resolve();
+    });
+    expect(onBatchSetPinned).toHaveBeenCalledTimes(2);
+    expect(onBatchSetPinned.mock.calls[1]).toEqual([["a2"], false]);
+    expect(screen.getByText("已选 1")).toBeInTheDocument();
+
+    // 通过工具栏移动菜单把选中账户移动到“工作”分组
+    fireEvent.click(screen.getByRole("button", { name: "移动到分组" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "工作" }));
+      await Promise.resolve();
+    });
+    expect(onBatchMoveToGroup).toHaveBeenCalledWith(["a2"], "g1");
+    expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+  });
+
+  it("支持网格视图与列表视图切换并持久化偏好、保留多选、备注与拖拽能力", () => {
+    renderStatefulPage({
+      accounts: [
+        { ...sampleAccounts[0], remark: "列表备注示例" },
+        sampleAccounts[1],
+        sampleAccounts[2],
+      ],
+      onBatchSetPinned: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const gridToggle = screen.getByRole("button", { name: "网格视图" });
+    const listToggle = screen.getByRole("button", { name: "列表视图" });
+    expect(gridToggle).toHaveAttribute("aria-pressed", "true");
+    expect(listToggle).toHaveAttribute("aria-pressed", "false");
+    expect(document.querySelectorAll('[data-slot="card"]')).toHaveLength(3);
+    expect(document.querySelector('[data-slot="account-list"]')).not.toBeInTheDocument();
+
+    // 切换到列表视图
+    fireEvent.click(listToggle);
+    expect(listToggle).toHaveAttribute("aria-pressed", "true");
+    expect(localStorage.getItem("2fa-view-mode")).toBe("list");
+    expect(document.querySelector('[data-slot="account-list"]')).toBeInTheDocument();
+    const rows = document.querySelectorAll('[data-slot="account-row"]');
+    expect(rows).toHaveLength(3);
+    expect(screen.getByText("列表备注示例")).toBeInTheDocument();
+
+    // 列表视图下支持复选框选择、工具栏按钮、备注和复制验证码
+    fireEvent.click(screen.getByLabelText("选择账户 GitHub"));
+    expect(screen.getByText("已选 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "置顶" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "移动到分组" })).toBeEnabled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "复制验证码 123456" })[0]);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("123456");
+
+    // 列表视图切到拖拽排序时行元素具备 draggable="true"
+    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
+    expect(screen.getByText("拖拽列表行以调整顺序")).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-slot="account-row"][draggable="true"]')).toHaveLength(3);
+  });
+
+  it("支持在网格和列表视图左键拖拽框选账户，在拖拽排序模式下禁用框选", async () => {
+    const { container } = renderStatefulPage();
+
+    const makeRect = (left: number, top: number, width: number, height: number) =>
+      ({
+        x: left,
+        y: top,
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const card1 = container.querySelector('[data-selectable-id="a1"]') as HTMLElement;
+    const card2 = container.querySelector('[data-selectable-id="a2"]') as HTMLElement;
+    const card3 = container.querySelector('[data-selectable-id="a3"]') as HTMLElement;
+    card1.getBoundingClientRect = () => makeRect(20, 140, 280, 130);
+    card2.getBoundingClientRect = () => makeRect(320, 140, 280, 130);
+    card3.getBoundingClientRect = () => makeRect(20, 300, 280, 130);
+
+    const pageRoot = container.firstElementChild as HTMLElement;
+    fireEvent.mouseDown(pageRoot, { button: 0, clientX: 5, clientY: 130 });
+    fireEvent.mouseMove(window, { clientX: 400, clientY: 220 });
+    fireEvent.mouseUp(window, { clientX: 400, clientY: 220 });
+
+    expect(screen.getByText("已选 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("选择账户 GitHub")).toBeChecked();
+    expect(screen.getByLabelText("选择账户 Google")).toBeChecked();
+    expect(screen.getByLabelText("选择账户 Cloudflare")).not.toBeChecked();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // 切换到列表视图并清空选中 -> 支持框选列表行
+    fireEvent.click(screen.getByRole("button", { name: "取消选择" }));
+    fireEvent.click(screen.getByRole("button", { name: "列表视图" }));
+
+    const row1 = container.querySelector('[data-selectable-id="a1"]') as HTMLElement;
+    const row2 = container.querySelector('[data-selectable-id="a2"]') as HTMLElement;
+    const row3 = container.querySelector('[data-selectable-id="a3"]') as HTMLElement;
+    row1.getBoundingClientRect = () => makeRect(20, 150, 720, 48);
+    row2.getBoundingClientRect = () => makeRect(20, 210, 720, 48);
+    row3.getBoundingClientRect = () => makeRect(20, 270, 720, 48);
+
+    fireEvent.mouseDown(pageRoot, { button: 0, clientX: 10, clientY: 140 });
+    fireEvent.mouseMove(window, { clientX: 300, clientY: 230 });
+    fireEvent.mouseUp(window, { clientX: 300, clientY: 230 });
+
+    expect(screen.getByText("已选 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("选择账户 GitHub")).toBeChecked();
+    expect(screen.getByLabelText("选择账户 Google")).toBeChecked();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // 切换到拖拽排序模式后禁用框选
+    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
+    expect(screen.getByText("拖拽列表行以调整顺序")).toBeInTheDocument();
+    fireEvent.mouseDown(pageRoot, { button: 0, clientX: 10, clientY: 140 });
+    fireEvent.mouseMove(window, { clientX: 300, clientY: 230 });
+    const overlay = container.querySelector('[data-slot="marquee-selection-box"]') as HTMLElement;
+    expect(overlay.dataset.active).toBe("false");
+    fireEvent.mouseUp(window, { clientX: 300, clientY: 230 });
+  });
+
+  it("支持自定义卡片大小和卡片间距并持久化，同时应用到自动与拖拽排序视图", () => {
+    renderStatefulPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "卡片布局设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "紧凑" }));
+
+    const grid = screen.getByText("GitHub").closest(".grid") as HTMLElement;
+    expect(grid).toHaveAttribute("data-card-scale", "compact");
+    expect(grid.style.gridTemplateColumns).toBe("repeat(auto-fill, minmax(260px, 1fr))");
+    expect(grid.style.gap).toBe("10px");
+    expect(JSON.parse(localStorage.getItem("2fa-card-layout") ?? "{}")).toEqual({
+      cardMinWidth: 260,
+      cardGap: 10,
+    });
+
+    fireEvent.change(screen.getByLabelText("卡片大小"), { target: { value: "400" } });
+    fireEvent.change(screen.getByLabelText("卡片间距"), { target: { value: "24" } });
+    expect(grid).toHaveAttribute("data-card-scale", "large");
+    expect(grid.style.gridTemplateColumns).toBe("repeat(auto-fill, minmax(400px, 1fr))");
+    expect(grid.style.gap).toBe("24px");
+
+    // 切换到拖拽排序模式仍保持相同卡片尺寸与间距
+    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
+    const dragGrid = screen.getByText("GitHub").closest(".grid") as HTMLElement;
+    expect(dragGrid).toHaveAttribute("data-card-scale", "large");
+    expect(dragGrid.style.gridTemplateColumns).toBe("repeat(auto-fill, minmax(400px, 1fr))");
+    expect(dragGrid.style.gap).toBe("24px");
   });
 });

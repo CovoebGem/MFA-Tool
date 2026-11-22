@@ -504,10 +504,8 @@ describe("App end-to-end persistence safeguards", () => {
     const checkbox = await screen.findByRole("checkbox", { name: "选择账户 GitHub" });
     fireEvent.click(checkbox);
 
-    fireEvent.change(screen.getByRole("combobox", { name: "选择目标分组" }), {
-      target: { value: "work" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "批量移动" }));
+    fireEvent.click(screen.getByRole("button", { name: "移动到分组" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Work" }));
 
     // 放行删除的 write_groups 写入，让排队的批量移动紧接着在队内执行
     await act(async () => {
@@ -684,14 +682,14 @@ describe("App end-to-end persistence safeguards", () => {
     const checkboxB = await screen.findByRole("checkbox", { name: "选择账户 Google" });
     fireEvent.click(checkboxA);
     fireEvent.click(checkboxB);
-    expect(screen.getByText("已选择 2 个账户")).toBeInTheDocument();
+    expect(screen.getByText("已选 2")).toBeInTheDocument();
 
     // 第一次刷新：A 消失，只剩 B -> 自动裁剪剩 1 项且仅 B 勾选
     mocks.accountsJson = JSON.stringify([accB]);
     fireEvent.click(screen.getByRole("button", { name: "刷新" }));
     await waitFor(() => {
       expect(screen.queryByRole("checkbox", { name: "选择账户 GitHub" })).not.toBeInTheDocument();
-      expect(screen.getByText("已选择 1 个账户")).toBeInTheDocument();
+      expect(screen.getByText("已选 1")).toBeInTheDocument();
     });
     expect(screen.getByRole("checkbox", { name: "选择账户 Google" })).toBeChecked();
 
@@ -701,14 +699,12 @@ describe("App end-to-end persistence safeguards", () => {
     const returnedA = await screen.findByRole("checkbox", { name: "选择账户 GitHub" });
     expect(returnedA).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "选择账户 Google" })).toBeChecked();
-    expect(screen.getByText("已选择 1 个账户")).toBeInTheDocument();
+    expect(screen.getByText("已选 1")).toBeInTheDocument();
 
     // 注入一次 write_accounts 失败后发起批量移动 -> B 保持勾选，A 保持未选中
     mocks.writeAccountsErrorQueue = ["move write failed"];
-    fireEvent.change(screen.getByRole("combobox", { name: "选择目标分组" }), {
-      target: { value: "work" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "批量移动" }));
+    fireEvent.click(screen.getByRole("button", { name: "移动到分组" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Work" }));
 
     await waitFor(() => {
       expect(
@@ -719,10 +715,8 @@ describe("App end-to-end persistence safeguards", () => {
     expect(screen.getByRole("checkbox", { name: "选择账户 GitHub" })).not.toBeChecked();
 
     // 再次点击批量移动成功 -> 仅 B 被移动到 work，A 仍留在 default
-    fireEvent.change(screen.getByRole("combobox", { name: "选择目标分组" }), {
-      target: { value: "work" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "批量移动" }));
+    fireEvent.click(screen.getByRole("button", { name: "移动到分组" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Work" }));
 
     await waitFor(() => {
       const saved = JSON.parse(mocks.accountsJson) as OTPAccount[];

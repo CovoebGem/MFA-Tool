@@ -44,4 +44,32 @@ describe("Sidebar", () => {
     expect(controlsContainer).toBeTruthy();
     expect(controlsContainer?.className).toContain("flex-col");
   });
+
+  it("renders footerSlot in both expanded and collapsed states without unmounting", () => {
+    const { rerender } = render(
+      <Sidebar
+        currentPage="home"
+        onNavigate={vi.fn()}
+        collapsed={false}
+        onToggleCollapse={vi.fn()}
+        footerSlot={<button type="button">检查更新</button>}
+      />,
+    );
+
+    const footerBtnExpanded = screen.getByRole("button", { name: "检查更新" });
+    expect(footerBtnExpanded).toBeInTheDocument();
+
+    rerender(
+      <Sidebar
+        currentPage="home"
+        onNavigate={vi.fn()}
+        collapsed
+        onToggleCollapse={vi.fn()}
+        footerSlot={<button type="button">检查更新</button>}
+      />,
+    );
+
+    const footerBtnCollapsed = screen.getByRole("button", { name: "检查更新" });
+    expect(footerBtnCollapsed).toBeInTheDocument();
+  });
 });
