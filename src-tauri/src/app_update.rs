@@ -448,12 +448,16 @@ fn build_direct_http_client(timeout: Duration) -> Result<Client, TransferError> 
 
 #[cfg(test)]
 pub(crate) fn is_signature_or_verification_error(err: &UpdaterError) -> bool {
+    #[cfg(target_os = "windows")]
+    if matches!(err, UpdaterError::Extract(_)) {
+        return true;
+    }
+
     matches!(
         err,
         UpdaterError::Minisign(_)
             | UpdaterError::Base64(_)
             | UpdaterError::SignatureUtf8(_)
-            | UpdaterError::Extract(_)
             | UpdaterError::BinaryNotFoundInArchive
             | UpdaterError::InvalidUpdaterFormat
     )
@@ -464,8 +468,9 @@ pub(crate) fn classify_updater_error(err: &UpdaterError, stage: &str) -> (&'stat
         UpdaterError::Minisign(_)
         | UpdaterError::Base64(_)
         | UpdaterError::SignatureUtf8(_) => ("signature", "更新包签名校验失败，已中止安装"),
-        UpdaterError::Extract(_)
-        | UpdaterError::BinaryNotFoundInArchive
+        #[cfg(target_os = "windows")]
+        UpdaterError::Extract(_) => ("package", "更新包格式无效，无法安装"),
+        UpdaterError::BinaryNotFoundInArchive
         | UpdaterError::InvalidUpdaterFormat => ("package", "更新包格式无效，无法安装"),
         UpdaterError::Serialization(_) => ("manifest", "更新清单格式无效"),
         UpdaterError::TargetNotFound(_) | UpdaterError::TargetsNotFound(_) => {
@@ -1740,6 +1745,12 @@ mod tests {
         let (sig_kind, _) =
             classify_updater_error(&UpdaterError::SignatureUtf8("bad".into()), "download");
         assert_eq!(sig_kind, "signature");
+        let (pkg_kind, _) =
+            classify_updater_error(&UpdaterError::InvalidUpdaterFormat, "install");
+        assert_eq!(pkg_kind, "package");
+        let (bin_kind, _) =
+            classify_updater_error(&UpdaterError::BinaryNotFoundInArchive, "install");
+        assert_eq!(bin_kind, "package");
     }
 
     #[test]
