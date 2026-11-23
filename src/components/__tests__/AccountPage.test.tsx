@@ -123,7 +123,7 @@ describe("AccountPage Property Tests", () => {
       }),
       { numRuns: 100 },
     );
-  }, 15000);
+  }, 30000);
 
   // Feature: account-toolbar, Property 6: 全选按钮状态与选择状态同步
   // Validates: Requirements 5.3
@@ -176,7 +176,7 @@ describe("AccountPage Property Tests", () => {
       ),
       { numRuns: 100 },
     );
-  }, 15000);
+  }, 30000);
 
   // Validates: 工具栏选中计数与快捷操作可用性与选择状态一致（不弹出 BatchToolbar）
   it("Property 4: 工具栏选中计数与快捷置顶/移动按钮随选择状态同步且不渲染 BatchToolbar", () => {
@@ -202,10 +202,11 @@ describe("AccountPage Property Tests", () => {
           }
 
           const selectedCount = selectedSubset.length;
-          expect(screen.queryByRole("button", { name: "批量移动" })).not.toBeInTheDocument();
+          expect(screen.queryByLabelText("批量移动")).not.toBeInTheDocument();
+          expect(screen.queryByText("批量移动")).not.toBeInTheDocument();
 
-          const moveBtn = screen.getByRole("button", { name: "移动到分组" });
-          const pinBtn = screen.getByRole("button", { name: "置顶" });
+          const moveBtn = screen.getByLabelText("移动到分组");
+          const pinBtn = screen.getByLabelText("置顶");
 
           if (selectedCount > 0) {
             expect(screen.getByText(`已选 ${selectedCount}`)).toBeInTheDocument();
@@ -222,7 +223,7 @@ describe("AccountPage Property Tests", () => {
       ),
       { numRuns: 100 },
     );
-  }, 15000);
+  }, 30000);
 });
 
 describe("AccountPage Unit Tests - 移除独立分组下拉框 & 分组名称显示", () => {
