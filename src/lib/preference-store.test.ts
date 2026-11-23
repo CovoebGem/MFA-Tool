@@ -4,6 +4,10 @@ import {
   saveSortConfig,
   loadSortConfig,
   DEFAULT_SORT_CONFIG,
+  isValidSortMode,
+  saveSortMode,
+  loadSortMode,
+  DEFAULT_SORT_MODE,
   isValidViewMode,
   saveViewMode,
   loadViewMode,
@@ -14,6 +18,9 @@ import {
   saveCardLayoutConfig,
   loadCardLayoutConfig,
   DEFAULT_CARD_LAYOUT_CONFIG,
+  saveSidebarCollapsed,
+  loadSidebarCollapsed,
+  DEFAULT_SIDEBAR_COLLAPSED,
 } from "./preference-store";
 
 describe("preference-store", () => {
@@ -98,6 +105,32 @@ describe("preference-store", () => {
     });
   });
 
+  describe("sortMode preference", () => {
+    it("validates supported sort modes only", () => {
+      expect(isValidSortMode("auto")).toBe(true);
+      expect(isValidSortMode("custom")).toBe(true);
+      expect(isValidSortMode("manual")).toBe(false);
+      expect(isValidSortMode("")).toBe(false);
+      expect(isValidSortMode(null)).toBe(false);
+      expect(isValidSortMode(123)).toBe(false);
+    });
+
+    it("saves and loads sort mode with auto default fallback", () => {
+      expect(DEFAULT_SORT_MODE).toBe("auto");
+      expect(loadSortMode()).toBe(DEFAULT_SORT_MODE);
+
+      saveSortMode("custom");
+      expect(localStorage.getItem("2fa-sort-mode")).toBe("custom");
+      expect(loadSortMode()).toBe("custom");
+
+      saveSortMode("auto");
+      expect(loadSortMode()).toBe("auto");
+
+      localStorage.setItem("2fa-sort-mode", "invalid-mode");
+      expect(loadSortMode()).toBe(DEFAULT_SORT_MODE);
+    });
+  });
+
   describe("viewMode preference", () => {
     it("validates supported view modes only", () => {
       expect(isValidViewMode("grid")).toBe(true);
@@ -175,6 +208,27 @@ describe("preference-store", () => {
 
       localStorage.setItem("2fa-card-layout", JSON.stringify({ cardMinWidth: 999, cardGap: 14 }));
       expect(loadCardLayoutConfig()).toEqual(DEFAULT_CARD_LAYOUT_CONFIG);
+    });
+  });
+
+  describe("sidebarCollapsed preference", () => {
+    it("saves and loads sidebar collapsed state with false default fallback", () => {
+      expect(DEFAULT_SIDEBAR_COLLAPSED).toBe(false);
+      expect(loadSidebarCollapsed()).toBe(false);
+
+      saveSidebarCollapsed(true);
+      expect(localStorage.getItem("2fa-sidebar-collapsed")).toBe("true");
+      expect(loadSidebarCollapsed()).toBe(true);
+
+      saveSidebarCollapsed(false);
+      expect(localStorage.getItem("2fa-sidebar-collapsed")).toBe("false");
+      expect(loadSidebarCollapsed()).toBe(false);
+
+      localStorage.setItem("2fa-sidebar-collapsed", "yes");
+      expect(loadSidebarCollapsed()).toBe(false);
+
+      localStorage.setItem("2fa-sidebar-collapsed", "1");
+      expect(loadSidebarCollapsed()).toBe(false);
     });
   });
 });

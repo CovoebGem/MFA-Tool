@@ -269,6 +269,34 @@ describe("GroupPage", () => {
       expect(document.querySelector('[data-slot="account-list"]')).toBeInTheDocument();
       expect(document.querySelectorAll('[data-slot="account-row"]')).toHaveLength(2);
     });
+
+    it("当 2fa-sort-mode 为 custom 时自动按自定义 order 排序，并支持通过排序下拉框切回自动排序", () => {
+      localStorage.setItem("2fa-sort-mode", "custom");
+      const customAccounts: OTPAccount[] = [
+        { ...mockAccounts[0], order: 1 }, // GitHub -> dev@test.com
+        { ...mockAccounts[1], order: 0 }, // Google -> user@test.com
+      ];
+
+      const { container } = render(
+        <GroupPage {...defaultProps} accounts={customAccounts} />,
+      );
+
+      const sortSelect = screen.getByLabelText("排序字段") as HTMLSelectElement;
+      expect(sortSelect.value).toBe("custom");
+      expect(
+        Array.from(container.querySelectorAll('[data-slot="card"] h3')).map(
+          (el) => el.textContent,
+        ),
+      ).toEqual(["Google", "GitHub"]);
+
+      fireEvent.change(sortSelect, { target: { value: "name" } });
+      expect(localStorage.getItem("2fa-sort-mode")).toBe("auto");
+      expect(
+        Array.from(container.querySelectorAll('[data-slot="card"] h3')).map(
+          (el) => el.textContent,
+        ),
+      ).toEqual(["GitHub", "Google"]);
+    });
   });
 
   describe("分组内批量选择与工具栏操作", () => {

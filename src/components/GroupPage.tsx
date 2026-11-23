@@ -1,4 +1,5 @@
 import {
+  memo,
   useState,
   useEffect,
   useLayoutEffect,
@@ -35,10 +36,12 @@ import {
   getCardScale,
   loadCardLayoutConfig,
   loadSortConfig,
+  loadSortMode,
   loadViewMode,
   normalizeCardLayoutConfig,
   saveCardLayoutConfig,
   saveSortConfig,
+  saveSortMode,
   saveViewMode,
 } from "../lib/preference-store";
 import {
@@ -53,6 +56,7 @@ import type {
   OTPAccount,
   Group,
   SortConfig,
+  SortMode,
 } from "../types";
 
 const noopRefresh = async () => {};
@@ -80,7 +84,7 @@ interface GroupPageProps {
   onCardLayoutChange?: (config: CardLayoutConfig) => void;
 }
 
-export default function GroupPage({
+export default memo(function GroupPage({
   groups,
   accounts,
   onCreateGroup,
@@ -105,6 +109,7 @@ export default function GroupPage({
   const [pendingDeleteGroup, setPendingDeleteGroup] = useState<Group | null>(null);
   const [deletingGroup, setDeletingGroup] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>(loadSortConfig);
+  const [sortMode, setSortMode] = useState<SortMode>(loadSortMode);
   const [viewMode, setViewMode] = useState<AccountViewMode>(loadViewMode);
   const [internalCardLayout, setInternalCardLayout] = useState<CardLayoutConfig>(
     loadCardLayoutConfig,
@@ -164,6 +169,13 @@ export default function GroupPage({
   const handleSortChange = useCallback((config: SortConfig) => {
     setSortConfig(config);
     saveSortConfig(config);
+    setSortMode("auto");
+    saveSortMode("auto");
+  }, []);
+
+  const handleSortModeChange = useCallback((mode: SortMode) => {
+    setSortMode(mode);
+    saveSortMode(mode);
   }, []);
 
   const handleViewModeChange = useCallback((mode: AccountViewMode) => {
@@ -262,8 +274,8 @@ export default function GroupPage({
   );
 
   const selectedAccounts = useMemo(
-    () => sortAccounts(filteredAccounts, sortConfig),
-    [filteredAccounts, sortConfig],
+    () => sortAccounts(filteredAccounts, sortConfig, sortMode),
+    [filteredAccounts, sortConfig, sortMode],
   );
 
   const visibleAccounts = useMemo(
@@ -514,7 +526,12 @@ export default function GroupPage({
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Separator orientation="vertical" className="hidden h-6 sm:block" />
-          <SortControls config={sortConfig} onChange={handleSortChange} />
+          <SortControls
+            config={sortConfig}
+            onChange={handleSortChange}
+            sortMode={sortMode}
+            onSortModeChange={handleSortModeChange}
+          />
           <Separator orientation="vertical" className="hidden h-6 sm:block" />
           <AccountToolbar
             accounts={visibleAccounts}
@@ -672,4 +689,4 @@ export default function GroupPage({
       <MarqueeSelectionBox overlayRef={overlayRef} />
     </div>
   );
-}
+});

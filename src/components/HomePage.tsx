@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import ImageUploader from "./ImageUploader";
 import ManualAddForm from "./ManualAddForm";
 import Dashboard from "./Dashboard";
@@ -17,7 +17,7 @@ interface HomePageProps {
   onToast: (message: string, type: "success" | "error") => void;
 }
 
-export default function HomePage({
+export default memo(function HomePage({
   accounts,
   groups,
   onAccountsAdded,
@@ -131,4 +131,4 @@ export default function HomePage({
       <RecentAccounts accounts={accounts} />
     </div>
   );
-}
+});

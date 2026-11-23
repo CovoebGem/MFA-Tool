@@ -72,4 +72,19 @@ describe("Sidebar", () => {
     const footerBtnCollapsed = screen.getByRole("button", { name: "检查更新" });
     expect(footerBtnCollapsed).toBeInTheDocument();
   });
+
+  it("does not apply transition-[width] layout animation on nav", () => {
+    const { container } = render(
+      <Sidebar
+        currentPage="home"
+        onNavigate={vi.fn()}
+        collapsed={false}
+        onToggleCollapse={vi.fn()}
+      />,
+    );
+
+    const nav = container.querySelector("nav");
+    expect(nav).toBeInTheDocument();
+    expect(nav?.className ?? "").not.toContain("transition-[width]");
+  });
 });

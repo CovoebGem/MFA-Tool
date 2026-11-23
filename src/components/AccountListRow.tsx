@@ -42,7 +42,9 @@ export interface AccountListRowProps {
   onToggleSelect?: (id: string) => void;
   dragProps?: HTMLAttributes<HTMLDivElement>;
   isDragging?: boolean;
+  isDragOverlay?: boolean;
   showDragHandle?: boolean;
+  dragPlaceholderCount?: number;
 }
 
 type CopiedField = "secret" | "url" | null;
@@ -212,7 +214,9 @@ const AccountListRow = memo(function AccountListRow({
   onToggleSelect,
   dragProps,
   isDragging = false,
+  isDragOverlay = false,
   showDragHandle = false,
+  dragPlaceholderCount,
 }: AccountListRowProps) {
   const rowRef = useRef<HTMLDivElement | null>(null);
   const [copied, setCopied] = useState<CopiedField>(null);
@@ -280,18 +284,32 @@ const AccountListRow = memo(function AccountListRow({
         {...dragProps}
         data-slot="account-row"
         data-pinned={isPinned ? "true" : "false"}
-        data-selectable-id={onToggleSelect ? account.id : undefined}
+        data-drag-placeholder={isDragging ? "true" : undefined}
+        data-dragging={isDragging ? "true" : undefined}
+        data-selectable-id={!isDragOverlay && onToggleSelect ? account.id : undefined}
+        data-no-marquee={!isDragOverlay && showDragHandle ? "true" : undefined}
         className={cn(
           "relative flex flex-col gap-2.5 px-4 py-2.5 transition-colors md:grid md:items-center md:gap-3",
-          !showDragHandle && "account-row-cv",
+          !isDragOverlay && !isDragging && "account-row-cv",
           getRowGridColumns(displayGroupColumn),
           isPinned ? "bg-pin-surface/20 hover:bg-pin-surface/35" : "hover:bg-muted/35",
           selected && "bg-primary/5 hover:bg-primary/10",
-          showDragHandle && "cursor-grab active:cursor-grabbing",
-          isDragging && "opacity-50",
+          showDragHandle && "group/row select-none",
+          isDragging &&
+            "bg-primary/[0.05] outline-1 -outline-offset-1 outline-dashed outline-primary/45 [&>*:not([data-drag-placeholder-label])]:opacity-0 [&>*:not([data-drag-placeholder-label])]:pointer-events-none",
           dragProps?.className,
         )}
       >
+        {isDragging && dragPlaceholderCount && dragPlaceholderCount > 1 && (
+          <div
+            data-drag-placeholder-label="true"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center px-3"
+          >
+            <span className="rounded-full border border-primary/35 bg-primary/10 px-3 py-0.5 text-xs font-semibold text-primary shadow-2xs">
+              将移入 {dragPlaceholderCount} 个账户
+            </span>
+          </div>
+        )}
         {isPinned && (
           <span
             className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-pin"
@@ -302,10 +320,14 @@ const AccountListRow = memo(function AccountListRow({
         {/* 列 1：拖拽/多选 + 图标 + 服务商与账户名 */}
         <div className="flex min-w-0 items-center gap-2.5">
           {showDragHandle && (
-            <GripVertical
-              className="size-4 shrink-0 text-muted-foreground/70"
+            <span
+              data-drag-handle="true"
+              title="拖拽调整顺序"
               aria-hidden="true"
-            />
+              className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/45 transition-colors duration-150 group-hover/row:text-muted-foreground hover:bg-accent hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+            >
+              <GripVertical className="size-4" />
+            </span>
           )}
           {onToggleSelect && (
             <input
@@ -378,7 +400,7 @@ const AccountListRow = memo(function AccountListRow({
             period={account.period}
             digits={account.digits}
             targetRef={rowRef}
-            observeVisibility={!showDragHandle}
+            observeVisibility={!isDragOverlay}
           />
         </div>
 

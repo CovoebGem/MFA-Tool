@@ -51,7 +51,7 @@ export default function Sidebar({
   return (
     <nav
       className={cn(
-        "fixed left-0 top-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground py-4 transition-[width] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
+        "fixed left-0 top-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground py-4",
         collapsed ? "w-16 items-center px-2" : "w-56 px-3",
       )}
       style={{ height: viewportHeight }}

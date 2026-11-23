@@ -3,16 +3,20 @@ import type {
   CardLayoutConfig,
   CardScale,
   SortConfig,
-  SortField,
   SortDirection,
+  SortField,
+  SortMode,
 } from "../types";
 
 const SORT_CONFIG_KEY = "2fa-sort-config";
+const SORT_MODE_KEY = "2fa-sort-mode";
 const VIEW_MODE_KEY = "2fa-view-mode";
 const CARD_LAYOUT_KEY = "2fa-card-layout";
+const SIDEBAR_COLLAPSED_KEY = "2fa-sidebar-collapsed";
 
 const VALID_FIELDS: readonly SortField[] = ["name", "issuer", "createdAt"];
 const VALID_DIRECTIONS: readonly SortDirection[] = ["asc", "desc"];
+const VALID_SORT_MODES: readonly SortMode[] = ["auto", "custom"];
 const VALID_VIEW_MODES: readonly AccountViewMode[] = ["grid", "list"];
 
 export const CARD_MIN_WIDTH_BOUNDS = { min: 260, max: 440, step: 10 } as const;
@@ -23,12 +27,16 @@ export const DEFAULT_SORT_CONFIG: SortConfig = {
   direction: "asc",
 };
 
+export const DEFAULT_SORT_MODE: SortMode = "auto";
+
 export const DEFAULT_VIEW_MODE: AccountViewMode = "grid";
 
 export const DEFAULT_CARD_LAYOUT_CONFIG: CardLayoutConfig = {
   cardMinWidth: 310,
   cardGap: 14,
 };
+
+export const DEFAULT_SIDEBAR_COLLAPSED = false;
 
 export const CARD_LAYOUT_PRESETS = {
   compact: { cardMinWidth: 260, cardGap: 10 },
@@ -67,6 +75,28 @@ export function loadSortConfig(): SortConfig {
     return isValidSortConfig(parsed) ? parsed : DEFAULT_SORT_CONFIG;
   } catch {
     return DEFAULT_SORT_CONFIG;
+  }
+}
+
+export function isValidSortMode(value: unknown): value is SortMode {
+  return typeof value === "string" && VALID_SORT_MODES.includes(value as SortMode);
+}
+
+export function saveSortMode(mode: SortMode): void {
+  try {
+    localStorage.setItem(SORT_MODE_KEY, mode);
+  } catch {
+    // localStorage 不可用时静默失败
+  }
+}
+
+export function loadSortMode(): SortMode {
+  try {
+    const raw = localStorage.getItem(SORT_MODE_KEY);
+    if (!raw) return DEFAULT_SORT_MODE;
+    return isValidSortMode(raw) ? raw : DEFAULT_SORT_MODE;
+  } catch {
+    return DEFAULT_SORT_MODE;
   }
 }
 
@@ -176,5 +206,22 @@ export function loadCardLayoutConfig(): CardLayoutConfig {
       : DEFAULT_CARD_LAYOUT_CONFIG;
   } catch {
     return DEFAULT_CARD_LAYOUT_CONFIG;
+  }
+}
+
+export function saveSidebarCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "true" : "false");
+  } catch {
+    // localStorage 不可用时静默失败
+  }
+}
+
+export function loadSidebarCollapsed(): boolean {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    return raw === "true";
+  } catch {
+    return DEFAULT_SIDEBAR_COLLAPSED;
   }
 }

@@ -62,6 +62,9 @@ export interface CardLayoutConfig {
 /** 卡片尺寸比例档位 */
 export type CardScale = "compact" | "normal" | "large";
 
+/** 排序模式 */
+export type SortMode = "auto" | "custom";
+
 /** 排序字段 */
 export type SortField = "name" | "issuer" | "createdAt";
 

@@ -1,4 +1,5 @@
 import {
+  memo,
   useState,
   useEffect,
   useLayoutEffect,
@@ -6,9 +7,7 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { LockKeyhole, Pin, SearchX } from "lucide-react";
-import AccountCard from "./AccountCard";
-import AccountListRow, { AccountListTable } from "./AccountListRow";
+import { LockKeyhole, SearchX } from "lucide-react";
 import DraggableAccountList from "./DraggableAccountList";
 import AccountToolbar from "./AccountToolbar";
 import SortControls from "./SortControls";
@@ -17,7 +16,6 @@ import CardLayoutControl from "./CardLayoutControl";
 import AccountSearchBar, { getSearchShortcutHint } from "./AccountSearchBar";
 import MarqueeSelectionBox from "./MarqueeSelectionBox";
 import { useMarqueeSelection } from "../hooks/useMarqueeSelection";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import {
@@ -28,16 +26,16 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "./ui/empty";
-import { cn } from "../lib/utils";
-import { isAccountPinned, sortAccounts, type SortMode } from "../lib/sorter";
+import { sortAccounts } from "../lib/sorter";
 import {
-  getCardScale,
   loadCardLayoutConfig,
   loadSortConfig,
+  loadSortMode,
   loadViewMode,
   normalizeCardLayoutConfig,
   saveCardLayoutConfig,
   saveSortConfig,
+  saveSortMode,
   saveViewMode,
 } from "../lib/preference-store";
 import {
@@ -52,6 +50,7 @@ import type {
   OTPAccount,
   Group,
   SortConfig,
+  SortMode,
 } from "../types";
 
 interface AccountPageProps {
@@ -89,7 +88,7 @@ function isEditableElement(element: Element | null, allowedElement: HTMLElement 
   );
 }
 
-export default function AccountPage({
+export default memo(function AccountPage({
   accounts,
   groups,
   onDelete,
@@ -109,7 +108,7 @@ export default function AccountPage({
 }: AccountPageProps) {
   const { t } = useOptionalI18n();
   const [sortConfig, setSortConfig] = useState<SortConfig>(loadSortConfig);
-  const [sortMode, setSortMode] = useState<SortMode>("auto");
+  const [sortMode, setSortMode] = useState<SortMode>(loadSortMode);
   const [viewMode, setViewMode] = useState<AccountViewMode>(loadViewMode);
   const [internalCardLayout, setInternalCardLayout] = useState<CardLayoutConfig>(
     loadCardLayoutConfig,
@@ -133,18 +132,6 @@ export default function AccountPage({
       }
     },
     [isControlledCardLayout, onCardLayoutChange],
-  );
-
-  const cardScale = useMemo(
-    () => getCardScale(effectiveCardLayout.cardMinWidth),
-    [effectiveCardLayout.cardMinWidth],
-  );
-  const cardGridStyle = useMemo(
-    () => ({
-      gridTemplateColumns: `repeat(auto-fill, minmax(${effectiveCardLayout.cardMinWidth}px, 1fr))`,
-      gap: `${effectiveCardLayout.cardGap}px`,
-    }),
-    [effectiveCardLayout.cardGap, effectiveCardLayout.cardMinWidth],
   );
 
   const effectiveSearchQuery = searchQuery ?? internalSearchQuery;
@@ -171,6 +158,8 @@ export default function AccountPage({
   const handleSortChange = useCallback((config: SortConfig) => {
     setSortConfig(config);
     saveSortConfig(config);
+    setSortMode("auto");
+    saveSortMode("auto");
   }, []);
 
   const handleViewModeChange = useCallback((mode: AccountViewMode) => {
@@ -179,14 +168,9 @@ export default function AccountPage({
   }, []);
 
   const handleSortModeChange = useCallback((mode: SortMode) => {
-    if (mode === "custom" && hasActiveQuery) {
-      return;
-    }
     setSortMode(mode);
-    if (mode === "custom") {
-      onSelectedIdsChange(new Set());
-    }
-  }, [hasActiveQuery, onSelectedIdsChange]);
+    saveSortMode(mode);
+  }, []);
 
   const groupNameById = useMemo(() => buildGroupNameMap(groups), [groups]);
 
@@ -199,19 +183,6 @@ export default function AccountPage({
     () => filterAccountsByQuery(sortedAccounts, effectiveSearchQuery, groupNameById),
     [sortedAccounts, effectiveSearchQuery, groupNameById],
   );
-
-  const { pinnedVisible, otherVisible } = useMemo(() => {
-    const pinned: OTPAccount[] = [];
-    const other: OTPAccount[] = [];
-    for (const account of visibleAccounts) {
-      if (isAccountPinned(account)) {
-        pinned.push(account);
-      } else {
-        other.push(account);
-      }
-    }
-    return { pinnedVisible: pinned, otherVisible: other };
-  }, [visibleAccounts]);
 
   const visibleIdSet = useMemo(
     () => new Set(visibleAccounts.map((account) => account.id)),
@@ -313,62 +284,28 @@ export default function AccountPage({
 
   const clearSelection = useCallback(() => onSelectedIdsChange(new Set()), [onSelectedIdsChange]);
 
-  const handleReorder = useCallback((reorderedAccounts: OTPAccount[]) => {
-    if (hasActiveQuery || !onReorder) {
-      return;
-    }
-    onReorder(reorderedAccounts);
-  }, [hasActiveQuery, onReorder]);
+  const handleReorder = useCallback(
+    (reorderedAccounts: OTPAccount[]) => {
+      if (hasActiveQuery || !onReorder) {
+        return;
+      }
+      onReorder(reorderedAccounts);
+      setSortMode("custom");
+      saveSortMode("custom");
+    },
+    [hasActiveQuery, onReorder],
+  );
 
-  const isCustomMode = sortMode === "custom";
-  const showInteractiveDragList = isCustomMode && !hasActiveQuery;
   const shortcutHint = useMemo(() => getSearchShortcutHint(), []);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const { overlayRef, handleMouseDown } = useMarqueeSelection({
     containerRef,
-    enabled: !isCustomMode && visibleAccounts.length > 0,
+    enabled: visibleAccounts.length > 0,
     selectedIds: effectiveSelectedIds,
     visibleIdSet,
     onSelectionChange: onSelectedIdsChange,
   });
-
-  const renderAccountsView = (items: OTPAccount[]) => {
-    if (viewMode === "list") {
-      return (
-        <AccountListTable showGroupColumn>
-          {items.map((account) => (
-            <AccountListRow
-              key={account.id}
-              account={account}
-              onDelete={onDelete}
-              onUpdate={onUpdate}
-              groupName={groupNameById.get(account.groupId) ?? "未知分组"}
-              showGroupColumn
-              selected={!isCustomMode ? effectiveSelectedIds.has(account.id) : undefined}
-              onToggleSelect={!isCustomMode ? toggleSelect : undefined}
-            />
-          ))}
-        </AccountListTable>
-      );
-    }
-
-    return (
-      <div className="grid" style={cardGridStyle} data-card-scale={cardScale}>
-        {items.map((account) => (
-          <AccountCard
-            key={account.id}
-            account={account}
-            onDelete={onDelete}
-            onUpdate={onUpdate}
-            groupName={groupNameById.get(account.groupId) ?? "未知分组"}
-            selected={!isCustomMode ? effectiveSelectedIds.has(account.id) : undefined}
-            onToggleSelect={!isCustomMode ? toggleSelect : undefined}
-          />
-        ))}
-      </div>
-    );
-  };
 
   return (
     <div
@@ -376,7 +313,7 @@ export default function AccountPage({
       onMouseDown={handleMouseDown}
       className="flex flex-1 flex-col gap-5 px-6 py-5"
     >
-      {/* 标题行与视图/排序模式切换 */}
+      {/* 标题行与视图/布局设置 */}
       <div
         data-no-marquee="true"
         className="flex flex-wrap items-center justify-between gap-3"
@@ -394,77 +331,49 @@ export default function AccountPage({
             onChange={handleCardLayoutChange}
             viewMode={viewMode}
           />
-
-          <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/80 p-1">
-            <button
-              type="button"
-              onClick={() => handleSortModeChange("auto")}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-[color,background-color,box-shadow] duration-150 cursor-pointer",
-                sortMode === "auto"
-                  ? "bg-card text-primary shadow-2xs"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              自动排序
-            </button>
-            <button
-              type="button"
-              disabled={hasActiveQuery}
-              title={hasActiveQuery ? t("accounts.dragDisabledHint") : undefined}
-              onClick={() => handleSortModeChange("custom")}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-[color,background-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
-                sortMode === "custom"
-                  ? "bg-card text-primary shadow-2xs"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              拖拽排序
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* ReUI 统一控制栏（置顶、移动到分组、删除、刷新、全选直达右侧） */}
-      {(accounts.length > 0 || sortMode === "auto") && (
-        <div
-          data-no-marquee="true"
-          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-2xs md:flex-row md:items-center md:justify-between"
-        >
-          {accounts.length > 0 && (
-            <div className="min-w-0 flex-1">
-              <AccountSearchBar
-                value={effectiveSearchQuery}
-                onChange={updateSearchQuery}
-                onClear={handleClearSearch}
-                inputRef={searchInputRef}
-                shortcutHint={shortcutHint}
-                compact
-              />
-            </div>
-          )}
+      {/* ReUI 统一控制栏（搜索、排序含自定义、置顶、移动到分组、删除、刷新、全选） */}
+      <div
+        data-no-marquee="true"
+        className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-2xs md:flex-row md:items-center md:justify-between"
+      >
+        {accounts.length > 0 && (
+          <div className="min-w-0 flex-1">
+            <AccountSearchBar
+              value={effectiveSearchQuery}
+              onChange={updateSearchQuery}
+              onClear={handleClearSearch}
+              inputRef={searchInputRef}
+              shortcutHint={shortcutHint}
+              compact
+            />
+          </div>
+        )}
 
-          {sortMode === "auto" && (
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <SortControls config={sortConfig} onChange={handleSortChange} />
-              <Separator orientation="vertical" className="hidden h-6 sm:block" />
-              <AccountToolbar
-                accounts={visibleAccounts}
-                groups={groups}
-                selectedIds={effectiveSelectedIds}
-                onDelete={onDelete}
-                onBatchDelete={onBatchDelete}
-                onBatchSetPinned={onBatchSetPinned}
-                onBatchMoveToGroup={onBatchMoveToGroup}
-                onRefresh={onRefresh}
-                onToggleSelectAll={toggleSelectAll}
-                onClearSelection={clearSelection}
-              />
-            </div>
-          )}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <SortControls
+            config={sortConfig}
+            onChange={handleSortChange}
+            sortMode={sortMode}
+            onSortModeChange={handleSortModeChange}
+          />
+          <Separator orientation="vertical" className="hidden h-6 sm:block" />
+          <AccountToolbar
+            accounts={visibleAccounts}
+            groups={groups}
+            selectedIds={effectiveSelectedIds}
+            onDelete={onDelete}
+            onBatchDelete={onBatchDelete}
+            onBatchSetPinned={onBatchSetPinned}
+            onBatchMoveToGroup={onBatchMoveToGroup}
+            onRefresh={onRefresh}
+            onToggleSelectAll={toggleSelectAll}
+            onClearSelection={clearSelection}
+          />
         </div>
-      )}
+      </div>
 
       {accounts.length === 0 ? (
         <Empty className="py-16">
@@ -502,61 +411,21 @@ export default function AccountPage({
             </Button>
           </EmptyContent>
         </Empty>
-      ) : isCustomMode ? (
-        <p className="text-xs text-muted-foreground">
-          {hasActiveQuery
-            ? t("accounts.dragDisabledHint")
-            : viewMode === "list"
-              ? "拖拽列表行以调整顺序"
-              : "拖拽卡片以调整顺序"}
-        </p>
-      ) : null}
-
-      {visibleAccounts.length > 0 && showInteractiveDragList ? (
+      ) : (
         <DraggableAccountList
           accounts={visibleAccounts}
           groups={groups}
           viewMode={viewMode}
           cardLayout={effectiveCardLayout}
+          dragEnabled={!hasActiveQuery && Boolean(onReorder)}
+          selectedIds={effectiveSelectedIds}
+          onToggleSelect={toggleSelect}
           onDelete={onDelete}
           onUpdate={onUpdate}
           onReorder={handleReorder}
         />
-      ) : visibleAccounts.length > 0 ? (
-        <div className="flex flex-col gap-4">
-          {pinnedVisible.length > 0 ? (
-            <div className="flex flex-col gap-6">
-              <section aria-label={t("accounts.pinnedSection")} className="flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <Pin className="size-3.5 text-pin shrink-0" aria-hidden="true" />
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {t("accounts.pinnedSection")}
-                  </span>
-                  <Badge variant="secondary">{pinnedVisible.length}</Badge>
-                  <div className="h-px flex-1 bg-border/60" aria-hidden="true" />
-                </div>
-                {renderAccountsView(pinnedVisible)}
-              </section>
-
-              {otherVisible.length > 0 && (
-                <section aria-label={t("accounts.otherSection")} className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {t("accounts.otherSection")}
-                    </span>
-                    <Badge variant="secondary">{otherVisible.length}</Badge>
-                    <div className="h-px flex-1 bg-border/60" aria-hidden="true" />
-                  </div>
-                  {renderAccountsView(otherVisible)}
-                </section>
-              )}
-            </div>
-          ) : (
-            renderAccountsView(visibleAccounts)
-          )}
-        </div>
-      ) : null}
+      )}
       <MarqueeSelectionBox overlayRef={overlayRef} />
     </div>
   );
-}
+});

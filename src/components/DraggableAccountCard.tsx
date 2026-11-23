@@ -1,10 +1,9 @@
-import { memo, useMemo, useCallback, type DragEvent } from "react";
+import { memo, useMemo, useCallback, type HTMLAttributes, type PointerEvent } from "react";
 import AccountCard from "./AccountCard";
 import type { OTPAccount } from "../types";
 
 interface DraggableAccountCardProps {
   account: OTPAccount;
-  index: number;
   onDelete: (id: string) => void;
   onUpdate?: (
     id: string,
@@ -14,60 +13,39 @@ interface DraggableAccountCardProps {
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
   isDragging?: boolean;
-  onDragStart: (index: number) => void;
-  onDragOver: (index: number) => void;
-  onDragEnd: () => void;
+  dragEnabled?: boolean;
+  dragPlaceholderCount?: number;
+  onDragPointerDown?: (accountId: string, e: PointerEvent<HTMLDivElement>) => void;
 }
 
 const DraggableAccountCard = memo(function DraggableAccountCard({
   account,
-  index,
   onDelete,
   onUpdate,
   groupName,
   selected,
   onToggleSelect,
-  isDragging,
-  onDragStart,
-  onDragOver,
-  onDragEnd,
+  isDragging = false,
+  dragEnabled = true,
+  dragPlaceholderCount,
+  onDragPointerDown,
 }: DraggableAccountCardProps) {
-  const handleDragStart = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", String(index));
-      onDragStart(index);
+  const handlePointerDown = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      onDragPointerDown?.(account.id, e);
     },
-    [index, onDragStart],
+    [account.id, onDragPointerDown],
   );
 
-  const handleDragOver = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      onDragOver(index);
-    },
-    [index, onDragOver],
-  );
-
-  const handleDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      onDragEnd();
-    },
-    [onDragEnd],
-  );
-
-  const dragProps = useMemo(
-    () => ({
-      draggable: true,
-      onDragStart: handleDragStart,
-      onDragOver: handleDragOver,
-      onDrop: handleDrop,
-      onDragEnd,
-    }),
-    [handleDragStart, handleDragOver, handleDrop, onDragEnd],
-  );
+  const dragProps = useMemo<HTMLAttributes<HTMLDivElement> | undefined>(() => {
+    if (!dragEnabled) {
+      return undefined;
+    }
+    return {
+      "data-sortable-id": account.id,
+      onPointerDown: handlePointerDown,
+    } as HTMLAttributes<HTMLDivElement>;
+  }, [account.id, dragEnabled, handlePointerDown]);
 
   return (
     <AccountCard
@@ -78,7 +56,8 @@ const DraggableAccountCard = memo(function DraggableAccountCard({
       selected={selected}
       onToggleSelect={onToggleSelect}
       isDragging={isDragging}
-      showDragHandle
+      showDragHandle={dragEnabled}
+      dragPlaceholderCount={dragPlaceholderCount}
       dragProps={dragProps}
     />
   );

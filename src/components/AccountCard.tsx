@@ -28,7 +28,9 @@ interface AccountCardProps {
   onToggleSelect?: (id: string) => void;
   dragProps?: HTMLAttributes<HTMLDivElement>;
   isDragging?: boolean;
+  isDragOverlay?: boolean;
   showDragHandle?: boolean;
+  dragPlaceholderCount?: number;
 }
 
 type CopiedField = "secret" | "url" | null;
@@ -166,7 +168,9 @@ const AccountCard = memo(function AccountCard({
   onToggleSelect,
   dragProps,
   isDragging = false,
+  isDragOverlay = false,
   showDragHandle = false,
+  dragPlaceholderCount,
 }: AccountCardProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [copied, setCopied] = useState<CopiedField>(null);
@@ -229,17 +233,31 @@ const AccountCard = memo(function AccountCard({
         ref={cardRef}
         {...dragProps}
         data-pinned={isPinned ? "true" : "false"}
-        data-selectable-id={onToggleSelect ? account.id : undefined}
+        data-drag-placeholder={isDragging ? "true" : undefined}
+        data-dragging={isDragging ? "true" : undefined}
+        data-selectable-id={!isDragOverlay && onToggleSelect ? account.id : undefined}
+        data-no-marquee={!isDragOverlay && showDragHandle ? "true" : undefined}
         className={cn(
-          "relative overflow-hidden transition-[border-color,box-shadow,transform,opacity] duration-150 hover:shadow-sm",
-          !showDragHandle && "account-card-cv",
+          "relative overflow-hidden transition-[border-color,box-shadow,background-color] duration-150 hover:shadow-sm",
+          !isDragOverlay && !isDragging && "account-card-cv",
           isPinned && "border-pin/45 ring-1 ring-pin/15",
           selected && "border-primary/50 ring-2 ring-primary/20",
-          showDragHandle && "cursor-grab active:cursor-grabbing",
-          isDragging && "opacity-50 scale-[0.98]",
+          showDragHandle && "group/card select-none",
+          isDragging &&
+            "border-dashed border-primary/50 bg-primary/[0.04] shadow-none ring-0 hover:shadow-none [&>*:not([data-drag-placeholder-label])]:opacity-0 [&>*:not([data-drag-placeholder-label])]:pointer-events-none",
           dragProps?.className,
         )}
       >
+        {isDragging && dragPlaceholderCount && dragPlaceholderCount > 1 && (
+          <div
+            data-drag-placeholder-label="true"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center px-3"
+          >
+            <span className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary shadow-2xs">
+              将移入 {dragPlaceholderCount} 个账户
+            </span>
+          </div>
+        )}
         {isPinned && (
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-pin"
@@ -250,12 +268,6 @@ const AccountCard = memo(function AccountCard({
         {/* 头部：账户信息 */}
         <div className="flex items-start justify-between gap-2 px-[var(--card-pad-x,1rem)] pt-[var(--card-pad-top,1rem)] pb-[var(--card-pad-gap,0.625rem)]">
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            {showDragHandle && (
-              <GripVertical
-                className="size-4 shrink-0 text-muted-foreground/70"
-                aria-hidden="true"
-              />
-            )}
             {onToggleSelect && (
               <input
                 type="checkbox"
@@ -299,6 +311,16 @@ const AccountCard = memo(function AccountCard({
               </p>
             </div>
           </div>
+          {showDragHandle && (
+            <span
+              data-drag-handle="true"
+              title="拖拽调整顺序"
+              aria-hidden="true"
+              className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/45 transition-colors duration-150 group-hover/card:text-muted-foreground hover:bg-accent hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+            >
+              <GripVertical className="size-4" />
+            </span>
+          )}
         </div>
 
         {/* 元信息徽章 */}
@@ -328,7 +350,7 @@ const AccountCard = memo(function AccountCard({
             period={account.period}
             digits={account.digits}
             targetRef={cardRef}
-            observeVisibility={!showDragHandle}
+            observeVisibility={!isDragOverlay}
           />
         </div>
 

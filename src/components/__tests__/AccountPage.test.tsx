@@ -459,35 +459,29 @@ describe("AccountPage 搜索与交互边界", () => {
     confirmSpy.mockRestore();
   });
 
-  it("搜索态禁用拖拽排序，已处于自定义排序时输入查询禁用拖拽且不触发子集覆盖", () => {
+  it("搜索态自动隐藏拖拽抓手并禁止拖拽重排，清空搜索后恢复可拖拽", () => {
     const { container, onReorder } = renderStatefulPage();
     const searchInput = screen.getByRole("searchbox", { name: "搜索账户" });
 
-    // 先切到拖拽排序 -> 所有 3 张卡片都具备 draggable="true"
-    const customBtn = screen.getByRole("button", { name: "拖拽排序" });
-    fireEvent.click(customBtn);
-    expect(screen.getByText("拖拽卡片以调整顺序")).toBeInTheDocument();
-    expect(container.querySelectorAll('[draggable="true"]')).toHaveLength(3);
+    // 默认即可直接拖拽，无需切换模式
+    expect(container.querySelectorAll('[data-sortable-id]')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-drag-handle="true"]')).toHaveLength(3);
 
-    // 切到拖拽排序后搜索 -> 按钮禁用，显示提示，卡片失去 draggable="true"，派发拖拽也不调用 onReorder
+    // 输入搜索词 -> 卡片失去拖拽属性与抓手，派发拖拽不调用 onReorder
     fireEvent.change(searchInput, { target: { value: "GitHub" } });
-    expect(customBtn).toBeDisabled();
-    expect(screen.getByText("清空搜索后可调整顺序")).toBeInTheDocument();
-    expect(container.querySelectorAll('[draggable="true"]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-sortable-id]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-drag-handle="true"]')).toHaveLength(0);
 
     const card = screen.getByText("GitHub").closest('[data-slot="card"]') as HTMLElement;
-    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() };
-    fireEvent.dragStart(card, { dataTransfer });
-    fireEvent.dragOver(card, { dataTransfer });
-    fireEvent.drop(card, { dataTransfer });
-    fireEvent.dragEnd(card);
+    fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 50, clientY: 150 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 300, clientY: 150 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 300, clientY: 150 });
     expect(onReorder).not.toHaveBeenCalled();
 
-    // 清空搜索恢复可拖拽状态 -> 3 张卡片恢复 draggable="true"
+    // 清空搜索恢复可拖拽状态
     fireEvent.keyDown(searchInput, { key: "Escape" });
-    expect(customBtn).not.toBeDisabled();
-    expect(screen.getByText("拖拽卡片以调整顺序")).toBeInTheDocument();
-    expect(container.querySelectorAll('[draggable="true"]')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-sortable-id]')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-drag-handle="true"]')).toHaveLength(3);
   });
 
   it("Ctrl/Cmd+F 聚焦搜索框且透传分组名与编辑能力给拖拽列表", () => {
@@ -499,9 +493,7 @@ describe("AccountPage 搜索与交互边界", () => {
     fireEvent.keyDown(window, { key: "f", ctrlKey: true });
     expect(document.activeElement).toBe(searchInput);
 
-    // 切到拖拽排序模式仍能看到分组徽章与编辑按钮
     fireEvent.keyDown(searchInput, { key: "Escape" });
-    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
     expect(screen.getAllByText("工作").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "编辑账户" }).length).toBe(3);
   });
@@ -514,7 +506,7 @@ describe("AccountPage 搜索与交互边界", () => {
       { ...sampleAccounts[2], pinned: false, order: 2 },
     ];
 
-    render(
+    const { container } = render(
       <AccountPage
         accounts={pinnedAccounts}
         groups={mockGroups}
@@ -554,19 +546,36 @@ describe("AccountPage 搜索与交互边界", () => {
     const cards = Array.from(document.querySelectorAll('[data-slot="card"]'));
     expect(cards.map((el) => el.getAttribute("data-pinned"))).toEqual(["true", "false"]);
 
-    // 切到拖拽排序模式后，尝试把置顶卡片拖向未置顶卡片不应触发跨分区重排
+    // 清空搜索后，尝试把置顶卡片拖向未置顶卡片应阻止并显示禁止反馈，不触发跨分区重排
     fireEvent.keyDown(searchInput, { key: "Escape" });
-    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
-    expect(screen.getByRole("region", { name: "已置顶" })).toHaveTextContent("Google");
-    expect(screen.getByRole("region", { name: "其他账户" })).toHaveTextContent("GitHub");
     const pinnedCard = screen.getByText("Google").closest('[data-slot="card"]') as HTMLElement;
     const unpinnedCard = screen.getByText("GitHub").closest('[data-slot="card"]') as HTMLElement;
-    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() };
-    fireEvent.dragStart(pinnedCard, { dataTransfer });
-    fireEvent.dragOver(unpinnedCard, { dataTransfer });
-    fireEvent.drop(unpinnedCard, { dataTransfer });
-    fireEvent.dragEnd(pinnedCard);
+    const rect = (left: number, top: number, width: number, height: number) =>
+      ({
+        x: left,
+        y: top,
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    pinnedCard.getBoundingClientRect = () => rect(20, 100, 260, 140);
+    unpinnedCard.getBoundingClientRect = () => rect(20, 300, 260, 140);
+    const cloudflareCard = screen.getByText("Cloudflare").closest('[data-slot="card"]') as HTMLElement;
+    cloudflareCard.getBoundingClientRect = () => rect(300, 300, 260, 140);
+
+    fireEvent.pointerDown(pinnedCard, { button: 0, pointerId: 1, clientX: 100, clientY: 160 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 100, clientY: 360 });
+    expect(document.querySelector('[data-slot="drag-overlay"]')).toHaveAttribute(
+      "data-drag-forbidden",
+      "true",
+    );
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 100, clientY: 360 });
     expect(onReorder).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('[data-slot="card"]')).toHaveLength(3);
   });
 
   it("支持通过工具栏置顶、取消置顶及移动到分组，并在成功清空、失败保留选中", async () => {
@@ -660,7 +669,7 @@ describe("AccountPage 搜索与交互边界", () => {
     expect(rows).toHaveLength(3);
     expect(screen.getByText("列表备注示例")).toBeInTheDocument();
 
-    // 列表视图下支持复选框选择、工具栏按钮、备注和复制验证码
+    // 列表视图下支持复选框选择、工具栏按钮、备注和复制验证码，且无需切模式即可具备拖拽能力
     fireEvent.click(screen.getByLabelText("选择账户 GitHub"));
     expect(screen.getByText("已选 1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "置顶" })).toBeEnabled();
@@ -669,13 +678,11 @@ describe("AccountPage 搜索与交互边界", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "复制验证码 123456" })[0]);
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith("123456");
 
-    // 列表视图切到拖拽排序时行元素具备 draggable="true"
-    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
-    expect(screen.getByText("拖拽列表行以调整顺序")).toBeInTheDocument();
-    expect(document.querySelectorAll('[data-slot="account-row"][draggable="true"]')).toHaveLength(3);
+    expect(document.querySelectorAll('[data-slot="account-row"][data-sortable-id]')).toHaveLength(3);
+    expect(document.querySelectorAll('[data-slot="account-row"] [data-drag-handle="true"]')).toHaveLength(3);
   });
 
-  it("支持在网格和列表视图左键拖拽框选账户，在拖拽排序模式下禁用框选", async () => {
+  it("支持在空白处左键拖拽框选账户，同时直接拖拽卡片不会误触发框选", async () => {
     const { container } = renderStatefulPage();
 
     const makeRect = (left: number, top: number, width: number, height: number) =>
@@ -697,6 +704,13 @@ describe("AccountPage 搜索与交互边界", () => {
     card1.getBoundingClientRect = () => makeRect(20, 140, 280, 130);
     card2.getBoundingClientRect = () => makeRect(320, 140, 280, 130);
     card3.getBoundingClientRect = () => makeRect(20, 300, 280, 130);
+
+    // 直接在卡片上按下拖动不会误触发框选
+    fireEvent.mouseDown(card1, { button: 0, clientX: 50, clientY: 160 });
+    fireEvent.mouseMove(window, { clientX: 200, clientY: 200 });
+    const overlay = container.querySelector('[data-slot="marquee-selection-box"]') as HTMLElement;
+    expect(overlay.dataset.active).toBe("false");
+    fireEvent.mouseUp(window, { clientX: 200, clientY: 200 });
 
     const pageRoot = container.firstElementChild as HTMLElement;
     fireEvent.mouseDown(pageRoot, { button: 0, clientX: 5, clientY: 130 });
@@ -730,22 +744,9 @@ describe("AccountPage 搜索与交互边界", () => {
     expect(screen.getByText("已选 2")).toBeInTheDocument();
     expect(screen.getByLabelText("选择账户 GitHub")).toBeChecked();
     expect(screen.getByLabelText("选择账户 Google")).toBeChecked();
-
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    // 切换到拖拽排序模式后禁用框选
-    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
-    expect(screen.getByText("拖拽列表行以调整顺序")).toBeInTheDocument();
-    fireEvent.mouseDown(pageRoot, { button: 0, clientX: 10, clientY: 140 });
-    fireEvent.mouseMove(window, { clientX: 300, clientY: 230 });
-    const overlay = container.querySelector('[data-slot="marquee-selection-box"]') as HTMLElement;
-    expect(overlay.dataset.active).toBe("false");
-    fireEvent.mouseUp(window, { clientX: 300, clientY: 230 });
   });
 
-  it("支持自定义卡片大小和卡片间距并持久化，同时应用到自动与拖拽排序视图", () => {
+  it("支持自定义卡片大小和卡片间距并持久化，同时应用到网格视图", () => {
     renderStatefulPage();
 
     fireEvent.click(screen.getByRole("button", { name: "卡片布局设置" }));
@@ -765,12 +766,185 @@ describe("AccountPage 搜索与交互边界", () => {
     expect(grid).toHaveAttribute("data-card-scale", "large");
     expect(grid.style.gridTemplateColumns).toBe("repeat(auto-fill, minmax(400px, 1fr))");
     expect(grid.style.gap).toBe("24px");
+  });
 
-    // 切换到拖拽排序模式仍保持相同卡片尺寸与间距
-    fireEvent.click(screen.getByRole("button", { name: "拖拽排序" }));
-    const dragGrid = screen.getByText("GitHub").closest(".grid") as HTMLElement;
-    expect(dragGrid).toHaveAttribute("data-card-scale", "large");
-    expect(dragGrid.style.gridTemplateColumns).toBe("repeat(auto-fill, minmax(400px, 1fr))");
-    expect(dragGrid.style.gap).toBe("24px");
+  it("统一排序模型：直接拖拽后自动切入并持久化自定义顺序，且工具栏与下拉框联动", async () => {
+    const onReorderSpy = vi.fn();
+
+    function ControlledHarness() {
+      const [accounts, setAccounts] = useState<OTPAccount[]>(sampleAccounts);
+      const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+      const handleReorder = (reordered: OTPAccount[]) => {
+        onReorderSpy(reordered);
+        setAccounts(reordered);
+      };
+      return (
+        <AccountPage
+          accounts={accounts}
+          groups={mockGroups}
+          onDelete={vi.fn()}
+          onBatchMoveToGroup={vi.fn()}
+          onRefresh={vi.fn().mockResolvedValue(undefined)}
+          onReorder={handleReorder}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
+        />
+      );
+    }
+
+    const { container, unmount } = render(<ControlledHarness />);
+
+    const makeRect = (left: number, top: number, width: number, height: number) =>
+      ({
+        x: left,
+        y: top,
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // 默认按名称升序：Google (alice), GitHub (dev), Cloudflare (ops)
+    const initialTitles = Array.from(container.querySelectorAll('[data-slot="card"] h3')).map(
+      (el) => el.textContent,
+    );
+    expect(initialTitles).toEqual(["Google", "GitHub", "Cloudflare"]);
+
+    const cardGoogle = screen.getByText("Google").closest('[data-slot="card"]') as HTMLElement;
+    const cardGitHub = screen.getByText("GitHub").closest('[data-slot="card"]') as HTMLElement;
+    const cardCloudflare = screen.getByText("Cloudflare").closest('[data-slot="card"]') as HTMLElement;
+    cardGoogle.getBoundingClientRect = () => makeRect(20, 100, 260, 140);
+    cardGitHub.getBoundingClientRect = () => makeRect(300, 100, 260, 140);
+    cardCloudflare.getBoundingClientRect = () => makeRect(580, 100, 260, 140);
+
+    // 直接将 Google 从第 0 位拖到第 2 位（Cloudflare 上）
+    fireEvent.pointerDown(cardGoogle, { button: 0, pointerId: 1, clientX: 100, clientY: 160 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 700, clientY: 160 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 700, clientY: 160 });
+
+    expect(onReorderSpy).toHaveBeenCalledTimes(1);
+    const reordered = onReorderSpy.mock.calls[0][0] as OTPAccount[];
+    expect(reordered.map((a) => a.issuer)).toEqual(["GitHub", "Cloudflare", "Google"]);
+    expect(localStorage.getItem("2fa-sort-mode")).toBe("custom");
+
+    const sortSelect = screen.getByLabelText("排序字段") as HTMLSelectElement;
+    expect(sortSelect.value).toBe("custom");
+    expect(screen.getByRole("button", { name: "自定义排序" })).toBeDisabled();
+
+    // 让松手尾随 click 抑制清理后，验证自定义顺序下仍可正常勾选与使用工具栏
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    fireEvent.click(screen.getByLabelText("选择账户 GitHub"));
+    expect(screen.getByText("已选 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "移动到分组" })).toBeEnabled();
+
+    unmount();
+
+    // 重新挂载后保持自定义排序状态与新顺序
+    const remounted = renderStatefulPage({ accounts: reordered });
+    expect((screen.getByLabelText("排序字段") as HTMLSelectElement).value).toBe("custom");
+    expect(
+      Array.from(remounted.container.querySelectorAll('[data-slot="card"] h3')).map(
+        (el) => el.textContent,
+      ),
+    ).toEqual(["GitHub", "Cloudflare", "Google"]);
+
+    // 切换排序下拉框回 "name" -> 恢复按名称自动排序并更新 localStorage
+    fireEvent.change(screen.getByLabelText("排序字段"), { target: { value: "name" } });
+    expect(localStorage.getItem("2fa-sort-mode")).toBe("auto");
+    expect(
+      Array.from(remounted.container.querySelectorAll('[data-slot="card"] h3')).map(
+        (el) => el.textContent,
+      ),
+    ).toEqual(["Google", "GitHub", "Cloudflare"]);
+
+    // 再次切回 "custom" -> 恢复此前拖拽顺序
+    fireEvent.change(screen.getByLabelText("排序字段"), { target: { value: "custom" } });
+    expect(localStorage.getItem("2fa-sort-mode")).toBe("custom");
+    expect(
+      Array.from(remounted.container.querySelectorAll('[data-slot="card"] h3')).map(
+        (el) => el.textContent,
+      ),
+    ).toEqual(["GitHub", "Cloudflare", "Google"]);
+  });
+
+  it("勾选多个账户后直接拖拽其中一个会整体移动并切入自定义排序，且保持原选中状态", async () => {
+    const onReorderSpy = vi.fn();
+
+    function ControlledHarness() {
+      const [accounts, setAccounts] = useState<OTPAccount[]>(sampleAccounts);
+      const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+      const handleReorder = (reordered: OTPAccount[]) => {
+        onReorderSpy(reordered);
+        setAccounts(reordered);
+      };
+      return (
+        <AccountPage
+          accounts={accounts}
+          groups={mockGroups}
+          onDelete={vi.fn()}
+          onBatchMoveToGroup={vi.fn()}
+          onRefresh={vi.fn().mockResolvedValue(undefined)}
+          onReorder={handleReorder}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
+        />
+      );
+    }
+
+    const { container } = render(<ControlledHarness />);
+
+    const makeRect = (left: number, top: number, width: number, height: number) =>
+      ({
+        x: left,
+        y: top,
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    for (const el of Array.from(container.querySelectorAll<HTMLElement>("[data-sortable-id]"))) {
+      el.getBoundingClientRect = () => {
+        const siblings = Array.from(container.querySelectorAll<HTMLElement>("[data-sortable-id]"));
+        const idx = siblings.indexOf(el);
+        return makeRect(20 + idx * 280, 100, 260, 140);
+      };
+    }
+
+    // 勾选前两项：Google、GitHub
+    fireEvent.click(screen.getByLabelText("选择账户 Google"));
+    fireEvent.click(screen.getByLabelText("选择账户 GitHub"));
+    expect(screen.getByText("已选 2")).toBeInTheDocument();
+
+    const cardGoogle = screen.getByText("Google").closest('[data-slot="card"]') as HTMLElement;
+    fireEvent.pointerDown(cardGoogle, { button: 0, pointerId: 1, clientX: 100, clientY: 160 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 120, clientY: 160 });
+    // 收拢后 Cloudflare 在 slot 1 (300..560)
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 430, clientY: 160 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 430, clientY: 160 });
+
+    expect(onReorderSpy).toHaveBeenCalledTimes(1);
+    const reordered = onReorderSpy.mock.calls[0][0] as OTPAccount[];
+    expect(reordered.map((a) => a.issuer)).toEqual(["Cloudflare", "Google", "GitHub"]);
+    expect(localStorage.getItem("2fa-sort-mode")).toBe("custom");
+    expect((screen.getByLabelText("排序字段") as HTMLSelectElement).value).toBe("custom");
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // 保持原有勾选状态，方便继续操作
+    expect(screen.getByText("已选 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("选择账户 Google")).toBeChecked();
+    expect(screen.getByLabelText("选择账户 GitHub")).toBeChecked();
+    expect(screen.getByLabelText("选择账户 Cloudflare")).not.toBeChecked();
   });
 });

@@ -23,8 +23,10 @@ import { addAccounts, loadAccounts, moveAccountsToGroup, saveAccounts } from "./
 import { mergeBackupData, sanitizeAccountNumbers } from "./lib/backup";
 import {
   loadCardLayoutConfig,
+  loadSidebarCollapsed,
   normalizeCardLayoutConfig,
   saveCardLayoutConfig,
+  saveSidebarCollapsed,
 } from "./lib/preference-store";
 import { mergeWebDavSyncData } from "./lib/webdav-sync";
 import {
@@ -45,7 +47,7 @@ function assignGroupsByIssuer(baseGroups: Group[], incomingAccounts: OTPAccount[
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(loadSidebarCollapsed);
   const [cardLayout, setCardLayout] = useState<CardLayoutConfig>(loadCardLayoutConfig);
   const [dedupState, setDedupState] = useState<{
     result: DedupResult;
@@ -64,6 +66,15 @@ function App() {
   const { theme, setTheme } = useTheme();
 
   const showToast = useCallback((message: string, type: "success" | "error") => setToast({ message, type }), []);
+  const handleCloseToast = useCallback(() => setToast(null), []);
+
+  const handleToggleSidebarCollapse = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      saveSidebarCollapsed(next);
+      return next;
+    });
+  }, []);
 
   const handleCardLayoutChange = useCallback((nextConfig: CardLayoutConfig) => {
     const normalized = normalizeCardLayoutConfig(nextConfig);
@@ -339,14 +350,17 @@ function App() {
     [commitAccountsAndGroups],
   );
 
-  const handleDedupDetected = (
-    result: DedupResult,
-    newGroups: Group[],
-    rawIncoming?: OTPAccount[],
-  ) => {
-    setDedupError(null);
-    setDedupState({ result, newGroups, rawIncoming });
-  };
+  const handleDedupDetected = useCallback(
+    (
+      result: DedupResult,
+      newGroups: Group[],
+      rawIncoming?: OTPAccount[],
+    ) => {
+      setDedupError(null);
+      setDedupState({ result, newGroups, rawIncoming });
+    },
+    [],
+  );
 
   const runDedupCommit = async (mode: "skip" | "override") => {
     if (!dedupState || dedupSubmittingRef.current) return;
@@ -422,9 +436,12 @@ function App() {
     }
   }, [commitAccountsAndGroups, showToast]);
 
-  const handleSaveToAccount = async (account: OTPAccount) => {
-    await addNewAccounts([account]);
-  };
+  const handleSaveToAccount = useCallback(
+    async (account: OTPAccount) => {
+      await addNewAccounts([account]);
+    },
+    [addNewAccounts],
+  );
 
   const persistAccountsAndGroups = useCallback(
     async (nextAccounts: OTPAccount[], nextGroups: Group[]) => {
@@ -504,11 +521,14 @@ function App() {
     [commitAccountsAndGroups],
   );
 
-  const handleImportBackup = async (importedAccounts: OTPAccount[], importedGroups: Group[]) => {
-    await commitAccountsAndGroups(({ accounts: currentAccounts, groups: currentGroups }) =>
-      mergeBackupData(currentAccounts, currentGroups, importedAccounts, importedGroups),
-    );
-  };
+  const handleImportBackup = useCallback(
+    async (importedAccounts: OTPAccount[], importedGroups: Group[]) => {
+      await commitAccountsAndGroups(({ accounts: currentAccounts, groups: currentGroups }) =>
+        mergeBackupData(currentAccounts, currentGroups, importedAccounts, importedGroups),
+      );
+    },
+    [commitAccountsAndGroups],
+  );
 
   const handleReorderAccounts = useCallback(async (reorderedAccounts: OTPAccount[]) => {
     await commitAccounts((currentAccounts) => {
@@ -518,13 +538,29 @@ function App() {
 
       const currentById = new Map(currentAccounts.map((account) => [account.id, account]));
       const seenIds = new Set<string>();
+      let seenUnpinned = false;
       for (const item of reorderedAccounts) {
-        if (!currentById.has(item.id) || seenIds.has(item.id)) {
+        const current = currentById.get(item.id);
+        if (!current || seenIds.has(item.id)) {
           return null;
+        }
+        const pinned = current.pinned === true;
+        if (pinned && seenUnpinned) {
+          return null;
+        }
+        if (!pinned) {
+          seenUnpinned = true;
         }
         seenIds.add(item.id);
       }
       if (seenIds.size !== currentAccounts.length) {
+        return null;
+      }
+
+      const isUnchanged = reorderedAccounts.every(
+        (item, index) => currentAccounts[index]?.id === item.id && currentAccounts[index]?.order === index,
+      );
+      if (isUnchanged) {
         return null;
       }
 
@@ -641,7 +677,7 @@ function App() {
         currentPage={currentPage}
         onNavigate={handleNavigate}
         collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        onToggleCollapse={handleToggleSidebarCollapse}
         viewportHeight={viewportHeight}
         theme={theme}
         onThemeChange={setTheme}
@@ -654,7 +690,7 @@ function App() {
         }
       />
       <main
-        className={`${sidebarCollapsed ? "ml-16" : "ml-56"} flex flex-col transition-[margin-left] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]`}
+        className={`${sidebarCollapsed ? "ml-16" : "ml-56"} flex flex-col`}
         style={{ minHeight: viewportHeight }}
       >
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-border bg-background px-6">
@@ -714,7 +750,7 @@ function App() {
         <Toast
           message={toast.message}
           type={toast.type}
-          onClose={() => setToast(null)}
+          onClose={handleCloseToast}
         />
       )}
     </div>

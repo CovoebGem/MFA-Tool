@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { memo, useState, useRef, useCallback, useEffect } from "react";
 import { ChevronDown, Download, Upload } from "lucide-react";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { writeFile, writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
@@ -59,7 +59,7 @@ const EXPORT_FORMAT_OPTIONS: ReadonlyArray<{
   },
 ];
 
-export default function BackupPanel({ accounts, groups, selectedAccountIds, onImport, onToast }: BackupPanelProps) {
+export default memo(function BackupPanel({ accounts, groups, selectedAccountIds, onImport, onToast }: BackupPanelProps) {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -298,4 +298,4 @@ export default function BackupPanel({ accounts, groups, selectedAccountIds, onIm
       />
     </div>
   );
-}
+});
